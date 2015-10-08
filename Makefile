@@ -1,4 +1,5 @@
 CC = gcc
+CFLAGS = -Wall -c
 SHAREDFLAGS = -shared
 OFLAG = -o
 LIB = libatosl.so
@@ -6,14 +7,14 @@ OBJECTS = atosl.o hqatosl.o converter.o
 
 all: release
 
-atosl.o: Atosl.c hqatosl.h Atosl.h
-	$(CC) atosl.c $(OFLAG) atosl.o
+atosl.o: atosl.c hqatosl.h atosl.h
+	$(CC) $(CFLAGS) atosl.c $(OFLAG) atosl.o
 
 converter.o: converter.c converter.h
-	$(CC) converter.c $(OFLAG) converter.o
+	$(CC) $(CFLAGS) converter.c $(OFLAG) converter.o
 
 hqatosl.o: hqatosl.c hqatosl.h
-	$(CC) hqatosl.c $(OFLAG) hqatosl.o
+	$(CC) $(CFLAGS) hqatosl.c $(OFLAG) hqatosl.o
 
 release: CFLAGS += -O2
 release: $(OBJECTS)
