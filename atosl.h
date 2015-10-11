@@ -9,14 +9,6 @@ extern "C" {
 #endif
 /*
  * Class:     Atosl
- * Method:    getArchitecture
- * Signature: (Ljava/lang/String;)Ljava/lang/String;
- */
-JNIEXPORT jstring JNICALL Java_Atosl_getArchitecture
-  (JNIEnv *, jobject, jstring);
-
-/*
- * Class:     Atosl
  * Method:    symbolicate
  * Signature: (Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;I)I
  */
