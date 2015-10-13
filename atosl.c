@@ -8,6 +8,9 @@
  *
  */
 
+#include "jni.h"
+#include "jni_md.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -25,11 +28,11 @@
 #include <dwarf.h>
 #include <libdwarf.h>
 
-#include "atosl.h"
+#include "fbatosl.h"
 #include "subprograms.h"
 #include "common.h"
 
-#define VERSION ATOSL_VERSION
+#define VERSION 1
 
 #define DWARF_ASSERT(ret, err) \
         do { \
@@ -1133,7 +1136,7 @@ JNIEXPORT jint JNICALL Java_Atosl_symbolicate
 
         // check CPU architecture
         for (i = 0; i < NUMOF(arch_str_to_type); i++) {
-                if (strcmp(arch_str_to_type[i].name, n_dSYM) == 0) {
+                if (strcmp(arch_str_to_type[i].name, n_arch) == 0) {
                         cpu_type = arch_str_to_type[i].type;
                         cpu_subtype = arch_str_to_type[i].subtype;
                         break;
@@ -1141,96 +1144,32 @@ JNIEXPORT jint JNICALL Java_Atosl_symbolicate
         }
         if ((cpu_type < 0) && (cpu_subtype < 0))
                 // fatal("unsupported architecture `%s'", optarg);
-                return -1;
+                return -1; // unsupported architecture
         options.cpu_type = cpu_type;
         options.cpu_subtype = cpu_subtype;
 
         // filename
         options.dsym_filename = n_dSYM;
-}
-int main(int argc, char *argv[]) {
-
-        while ((c = getopt_long(argc, argv, shortopts, longopts, &option_index))
-               >= 0) {
-                switch (c) {
-                case 'l':
-                        errno = 0;
-                        address = strtol(optarg, (char **)NULL, 16);
-                        if (errno != 0)
-                                fatal("invalid load address: `%s': %s", optarg, strerror(errno));
-                        options.load_address = address;
-                        break;
-                case 'o':
-                        options.dsym_filename = optarg;
-                        break;
-                case 'A':
-                        for (i = 0; i < NUMOF(arch_str_to_type); i++) {
-                                if (strcmp(arch_str_to_type[i].name, optarg) == 0) {
-                                        cpu_type = arch_str_to_type[i].type;
-                                        cpu_subtype = arch_str_to_type[i].subtype;
-                                        break;
-                                }
-                        }
-                        if ((cpu_type < 0) && (cpu_subtype < 0))
-                                fatal("unsupported architecture `%s'", optarg);
-                        options.cpu_type = cpu_type;
-                        options.cpu_subtype = cpu_subtype;
-                        break;
-                case 'v':
-                        debug = 1;
-                        break;
-                case 'g':
-                        options.use_globals = 1;
-                        break;
-                case 'c':
-                        options.use_cache = 0;
-                        break;
-                case 'C':
-                        options.cache_dir = optarg;
-                        break;
-                case 'D':
-                        options.should_demangle = 0;
-                        break;
-                case 'V':
-                        fprintf(stderr, "atosl %s\n", VERSION);
-                        exit(EXIT_SUCCESS);
-                case '?':
-                        print_help();
-                        exit(EXIT_FAILURE);
-                case 'h':
-                        print_help();
-                        exit(EXIT_SUCCESS);
-                default:
-                        fatal("unhandled option");
-                }
-        }
-
-        if (!options.dsym_filename)
-                fatal("no filename specified with -o");
 
         fd = open(options.dsym_filename, O_RDONLY);
         if (fd < 0)
-                fatal("unable to open `%s': %s",
-                      options.dsym_filename,
-                      strerror(errno));
-
+                // fatal("unable to open `%s': %s", options.dsym_filename, strerror(errno));
+                return -2; // unable to open file
         ret = _read(fd, &magic, sizeof(magic));
         if (ret < 0)
-                fatal_file(fd);
-
+                return -3; // unable to read file
         if (magic == FAT_CIGAM) {
                 /* Find the architecture we want.. */
                 uint32_t nfat_arch;
 
                 ret = _read(fd, &nfat_arch, sizeof(nfat_arch));
                 if (ret < 0)
-                        fatal_file(fd);
-
+                        return -3; // unable to read file
                 nfat_arch = ntohl(nfat_arch);
                 for (i = 0; i < nfat_arch; i++) {
                         ret = _read(fd, &context.arch, sizeof(context.arch));
                         if (ret < 0)
-                                fatal("unable to read arch struct");
+                                return -4; // unable to read architecture
 
                         context.arch.cputype = ntohl(context.arch.cputype);
                         context.arch.cpusubtype = ntohl(context.arch.cpusubtype);
@@ -1241,47 +1180,33 @@ int main(int argc, char *argv[]) {
                                 /* good! */
                                 ret = lseek(fd, context.arch.offset, SEEK_SET);
                                 if (ret < 0)
-                                        fatal("unable to seek to arch (offset=%ld): %s",
-                                              context.arch.offset, strerror(errno));
+                                        return -5; // unable to seek architecture
 
                                 ret = _read(fd, &magic, sizeof(magic));
                                 if (ret < 0)
-                                        fatal_file(fd);
+                                        return -3; // unable to read file
 
                                 found = 1;
                                 break;
-                        } else {
-                                /* skip */
-                                if (debug) {
-                                        fprintf(stderr, "Skipping arch: %x %x\n",
-                                                context.arch.cputype, context.arch.cpusubtype);
-                                }
                         }
                 }
         } else {
                 found = 1;
         }
-
         if (!found)
-                fatal("no valid architectures found");
+                return -6; // architecture not found
 
         if (magic != MH_MAGIC && magic != MH_MAGIC_64)
-                fatal("invalid magic for architecture");
-
-        if (argc <= optind)
-                fatal_usage("no addresses specified");
-
+                return -7; // invalid magic for architecture
         dwarf_mach_object_access_init(fd, &binary_interface, &derr);
         assert(binary_interface);
 
         if (options.load_address == LONG_MAX)
                 options.load_address = context.intended_addr;
-
         ret = dwarf_object_init(binary_interface,
                                 dwarf_error_handler,
                                 errarg, &dbg, &err);
         DWARF_ASSERT(ret, err);
-
         /* If there is dwarf info we'll use that to parse, otherwise we'll use the
          * symbol table */
         if (context.is_dwarf && ret == DW_DLV_OK) {
@@ -1298,12 +1223,14 @@ int main(int argc, char *argv[]) {
                                          SUBPROGRAMS_CUS,
                                          &opts);
 
-                for (i = optind; i < argc; i++) {
+                for (i = 1; i < adrlen; i++) {
+                        jstring arr_e = (jstring) (*env)->GetObjectArrayElement(env, adr, i);
+                        const char *arr_v = (*env)->GetStringUTFChars(env, arr_e, 0);
                         Dwarf_Addr addr;
                         errno = 0;
-                        addr = strtol(argv[i], (char **)NULL, 16);
+                        addr = strtol(arr_v, (char **)NULL, 16);
                         if (errno != 0)
-                                fatal("invalid address: `%s': %s", argv[i], strerror(errno));
+                                return -8; // invalid address
                         ret = print_dwarf_symbol(dbg,
                                                  options.load_address - context.intended_addr,
                                                  addr);
@@ -1313,7 +1240,7 @@ int main(int argc, char *argv[]) {
                         }
 
                         if ((ret != DW_DLV_OK) && derr) {
-                                printf("%s\n", argv[i]);
+                                printf("%s\n", arr_v);
                         }
                 }
 
@@ -1322,18 +1249,20 @@ int main(int argc, char *argv[]) {
                 ret = dwarf_object_finish(dbg, &err);
                 DWARF_ASSERT(ret, err);
         } else {
-                for (i = optind; i < argc; i++) {
+                for (i = 1; i < adrlen; i++) {
+                        jstring arr_e = (jstring) (*env)->GetObjectArrayElement(env, adr, i);
+                        const char *arr_v = (*env)->GetStringUTFChars(env, arr_e, 0);
                         Dwarf_Addr addr;
                         errno = 0;
-                        addr = strtol(argv[i], (char **)NULL, 16);
+                        addr = strtol(arr_v, (char **)NULL, 16);
                         if (errno != 0)
-                                fatal("invalid address address: `%s': %s", optarg, strerror(errno));
+                                return -8; // invalid address
                         ret = find_and_print_symtab_symbol(
                                 options.load_address - context.intended_addr,
                                 addr);
 
                         if (ret != DW_DLV_OK)
-                                printf("%s\n", argv[i]);
+                                printf("%s\n", arr_v);
                 }
         }
 
@@ -1341,5 +1270,3 @@ int main(int argc, char *argv[]) {
 
         return 0;
 }
-
-/* vim:set ts=4 sw=4 sts=4 expandtab: */

@@ -1,14 +1,12 @@
 public class Atosl {
 native int symbolicate(String arch, String dSYM, String[] addresses, int addressLength);
 static {
-        System.load("atosl_library_path");
+        System.load("/Users/devholic/Desktop/git/honeyqa/atosl-java/libatosl.so");
 }
 static public void main(String argv[]) {
         //self	ViewController *	0x1275442a0	0x00000001275442a0
-        String test1_Address[] = {"0x0000b1e7"};
-        String test2_Address[] = {"0x00006ed7"};
+        String test1_Address[] = {"0x1275442a0","0x00000001275442a0"};
         Atosl atosl = new Atosl();
-        atosl.symbolicate("armv7s", "./res/CrashTest3Dwarf.thin", test1_Address, test1_Address.length);
-        atosl.symbolicate("armv7s", "./res/CrashTest3Dwarf.fat", test2_Address, test2_Address.length);
+        System.out.println(atosl.symbolicate("arm64", "./test/res/test.app.dSYM/Contents/Resources/DWARF/test", test1_Address, test1_Address.length));
 }
 }
