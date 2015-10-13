@@ -1129,6 +1129,7 @@ JNIEXPORT jint JNICALL Java_Atosl_symbolicate
         cpu_type_t cpu_type = -1;
         cpu_subtype_t cpu_subtype = -1;
         Dwarf_Addr address;
+
         memset(&context, 0, sizeof(context));
         // load from java
         const char *n_arch = (*env)->GetStringUTFChars(env, arch, NULL);
@@ -1203,6 +1204,11 @@ JNIEXPORT jint JNICALL Java_Atosl_symbolicate
 
         if (options.load_address == LONG_MAX)
                 options.load_address = context.intended_addr;
+        // load-address
+        jstring lala = (jstring) (*env)->GetObjectArrayElement(env, adr, 0);
+        const char *lalachar = (*env)->GetStringUTFChars(env, lala, 0);
+        address = strtol(lalachar, (char **)NULL, 16);
+        options.load_address = address;
         ret = dwarf_object_init(binary_interface,
                                 dwarf_error_handler,
                                 errarg, &dbg, &err);
@@ -1226,6 +1232,7 @@ JNIEXPORT jint JNICALL Java_Atosl_symbolicate
                 for (i = 1; i < adrlen; i++) {
                         jstring arr_e = (jstring) (*env)->GetObjectArrayElement(env, adr, i);
                         const char *arr_v = (*env)->GetStringUTFChars(env, arr_e, 0);
+                        printf("%s\n",arr_v);
                         Dwarf_Addr addr;
                         errno = 0;
                         addr = strtol(arr_v, (char **)NULL, 16);
@@ -1252,6 +1259,7 @@ JNIEXPORT jint JNICALL Java_Atosl_symbolicate
                 for (i = 1; i < adrlen; i++) {
                         jstring arr_e = (jstring) (*env)->GetObjectArrayElement(env, adr, i);
                         const char *arr_v = (*env)->GetStringUTFChars(env, arr_e, 0);
+                        printf("%s\n",arr_v);
                         Dwarf_Addr addr;
                         errno = 0;
                         addr = strtol(arr_v, (char **)NULL, 16);
