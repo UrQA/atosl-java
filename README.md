@@ -48,7 +48,7 @@ symbolicate(String arch, String executable, String[] addresses, int addressLengt
 
 ## Example
 * Example file is in `/test` folder
-	* Data from [facebook/atosl | Issue #4](https://github.com/facebook/atosl/issues/4) 
+	* Data from [facebook/atosl | Issue #4](https://github.com/facebook/atosl/issues/4#issuecomment-36735953) 
 
 ## Reference
 * [facebook/Atosl](https://github.com/facebook/atosl)
