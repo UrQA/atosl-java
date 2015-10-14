@@ -34,7 +34,7 @@ symbolicate(String arch, String executable, String[] addresses, int addressLengt
 ---
 
 | code | status |
-| - | - |
+| --- | --- |
 | 0 | success |
 | -1 | unsupported architecture |
 | -2 | unable to open dSYM file |
