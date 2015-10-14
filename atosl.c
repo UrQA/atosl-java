@@ -1232,7 +1232,6 @@ JNIEXPORT jint JNICALL Java_Atosl_symbolicate
                 for (i = 1; i < adrlen; i++) {
                         jstring arr_e = (jstring) (*env)->GetObjectArrayElement(env, adr, i);
                         const char *arr_v = (*env)->GetStringUTFChars(env, arr_e, 0);
-                        printf("%s\n",arr_v);
                         Dwarf_Addr addr;
                         errno = 0;
                         addr = strtol(arr_v, (char **)NULL, 16);
@@ -1259,7 +1258,6 @@ JNIEXPORT jint JNICALL Java_Atosl_symbolicate
                 for (i = 1; i < adrlen; i++) {
                         jstring arr_e = (jstring) (*env)->GetObjectArrayElement(env, adr, i);
                         const char *arr_v = (*env)->GetStringUTFChars(env, arr_e, 0);
-                        printf("%s\n",arr_v);
                         Dwarf_Addr addr;
                         errno = 0;
                         addr = strtol(arr_v, (char **)NULL, 16);
