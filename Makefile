@@ -1,24 +1,25 @@
 CC = gcc
-CFLAGS = -Wall -c
+CFLAGS = -Wall -c -fPIC
+LDFLAGS = -ldwarf -liberty
 SHAREDFLAGS = -shared
 OFLAG = -o
 LIB = libatosl.so
-OBJECTS = atosl.o hqatosl.o converter.o
+OBJECTS = atosl.o common.o subprograms.o
 
 all: release
 
-atosl.o: atosl.c hqatosl.h atosl.h
-	$(CC) $(CFLAGS) atosl.c $(OFLAG) atosl.o
+atosl.o: atosl.c atosl.h fbatosl.h subprograms.h common.h
+	$(CC) $(CFLAGS) atosl.c $(OFLAG) atosl.o ${LDFLAGS}
 
-converter.o: converter.c converter.h
-	$(CC) $(CFLAGS) converter.c $(OFLAG) converter.o
+common.o: common.c common.h
+	$(CC) $(CFLAGS) common.c $(OFLAG) common.o ${LDFLAGS}
 
-hqatosl.o: hqatosl.c hqatosl.h
-	$(CC) $(CFLAGS) hqatosl.c $(OFLAG) hqatosl.o
+subprograms.o: subprograms.c subprograms.h
+	$(CC) $(CFLAGS) subprograms.c $(OFLAG) subprograms.o ${LDFLAGS}
 
 release: CFLAGS += -O2
 release: $(OBJECTS)
-	$(CC) $(OFLAG) $(LIB) $(SHAREDFLAGS) $(OBJECTS)
+	$(CC) $(OFLAG) $(LIB) $(SHAREDFLAGS) $(OBJECTS) ${LDFLAGS}
 
 clean:
 	rm -rf $(LIB) $(DEBUG) *.o
