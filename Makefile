@@ -1,7 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -c
+CFLAGS = -Wall -c -fPIC
 LDFLAGS = -ldwarf -liberty
-LDFLAGS += -L/usr/local/Cellar/binutils/2.24/lib/
 SHAREDFLAGS = -shared
 OFLAG = -o
 LIB = libatosl.so
