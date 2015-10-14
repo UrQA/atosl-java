@@ -19,8 +19,8 @@
 #include <errno.h>
 #include <libgen.h>
 
-#include <dwarf.h>
-#include <libdwarf.h>
+#include "dwarf.h"
+#include "libdwarf.h"
 
 #include "subprograms.h"
 #include "common.h"
@@ -59,7 +59,7 @@ static char* get_function_name_with_params(char *die_name, Dwarf_Die the_die, Dw
     char *symbol_name = malloc(symbol_name_buffer_length);
     if (!symbol_name)
         fatal("unable to allocate memory");
-    
+
     /* Concatenate subprogram name and " (" */
     strcpy(symbol_name, die_name);
     strcat(symbol_name, " (");
@@ -70,7 +70,7 @@ static char* get_function_name_with_params(char *die_name, Dwarf_Die the_die, Dw
     Dwarf_Die next_die;
     rc = dwarf_child(the_die, &child_die, &err);
     DWARF_ASSERT(rc, err);
-    
+
     if (rc == DW_DLV_OK && child_die){
         do {
             /* Get child tag */
@@ -78,7 +78,7 @@ static char* get_function_name_with_params(char *die_name, Dwarf_Die the_die, Dw
             rc = dwarf_tag(child_die, &child_tag, &err);
             if (rc != DW_DLV_OK)
                 fatal("unable to parse dwarf tag");
-            
+
             /* Check if child is a parameter */
             if (child_tag == DW_TAG_formal_parameter) {
                 char* param_name = 0;
@@ -86,27 +86,27 @@ static char* get_function_name_with_params(char *die_name, Dwarf_Die the_die, Dw
                 /* Get param name (child die name), ignoring the "self" parameter */
                 rc = dwarf_diename(child_die, &param_name, &err);
                 if (rc == DW_DLV_OK && strcmp(param_name, "self") != 0) {
-                
+
                     /* Update actual symbol name string length */
                     symbol_name_length += strlen(param_name) + 2;
-                    
+
                     /* Check if symbol name string buffer needs expansion */
                     if (symbol_name_length >= symbol_name_buffer_length - 1)
-                        
+
                     /* Expand (reallocate) symbol name string buffer */
                         symbol_name = realloc(symbol_name, symbol_name_buffer_length *= 2);
-                    
+
                     /* Concatenate param name and ", " */
                     strcat(symbol_name, param_name);
                     strcat(symbol_name, ", ");
                 }
             }
-            
+
             /* Move to next sibling (param) */
             rc = dwarf_siblingof(dbg, child_die, &next_die, &err);
             DWARF_ASSERT(rc, err);
             dwarf_dealloc(dbg, child_die, DW_DLA_DIE);
-            
+
             child_die = next_die;
         } while (rc != DW_DLV_NO_ENTRY);
     }
@@ -117,7 +117,7 @@ static char* get_function_name_with_params(char *die_name, Dwarf_Die the_die, Dw
         symbol_name[len - 1] = 0;
         symbol_name[len - 2] = 0;
     }
-    
+
     strcat (symbol_name, ")");
 
     return symbol_name;
@@ -185,11 +185,11 @@ static struct dwarf_subprogram_t *read_cu_entry(
         memset(subprogram, 0, sizeof(*subprogram));
 
         char* symbol_name = die_name;
-        
+
         /* Concatenate function params in case this is Swift */
         if (language == DW_LANG_Swift)
             symbol_name = get_function_name_with_params(die_name, the_die, dbg);
-        
+
         subprogram->lowpc = lowpc;
         subprogram->highpc = highpc;
         subprogram->name = symbol_name;
@@ -219,7 +219,7 @@ static void handle_die(
         rc = dwarf_child(current_die, &child_die, &err);
         DWARF_ASSERT(rc, err);
         if (rc == DW_DLV_OK && child_die)
-            handle_die(subprograms, dbg, cu_die, child_die, language);    
+            handle_die(subprograms, dbg, cu_die, child_die, language);
 
         rc = dwarf_siblingof(dbg, current_die, &next_die, &err);
         DWARF_ASSERT(rc, err);
@@ -279,7 +279,7 @@ static struct dwarf_subprogram_t *read_from_cus(Dwarf_Debug dbg)
         ret = dwarf_child(cu_die, &child_die, &err);
         DWARF_ASSERT(ret, err);
 
-        handle_die(&subprograms, dbg, cu_die, child_die, language);  
+        handle_die(&subprograms, dbg, cu_die, child_die, language);
 
         dwarf_dealloc(dbg, cu_die, DW_DLA_DIE);
     }

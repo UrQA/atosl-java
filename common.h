@@ -11,7 +11,7 @@
 #ifndef COMMON_
 #define COMMON_
 
-#include <libdwarf.h>
+#include "libdwarf.h"
 
 #define USAGE "Usage: atosl -o|--dsym <FILENAME> [OPTIONS]... <ADDRESS>..."
 
