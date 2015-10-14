@@ -7,7 +7,7 @@ static public void main(String argv[]) {
         String test1_Address[] = {"0xcf000","0x0017ddd5"};
         Atosl atosl = new Atosl();
         System.out.println(atosl.symbolicate("armv7",
-        "./test/res/MapOut.app.dSYM/Contents/Resources/DWARF/MapOut",
+        "./res/MapOut.app.dSYM/Contents/Resources/DWARF/MapOut",
         test1_Address, test1_Address.length));
 }
 }
