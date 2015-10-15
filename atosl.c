@@ -160,32 +160,6 @@ typedef struct {
         struct dwarf_section_64_t *sections_64;
 } dwarf_mach_object_access_internals_t;
 
-void print_help(void)
-{
-        fprintf(stderr, "atosl %s\n", VERSION);
-        fprintf(stderr, USAGE "\n");
-        fprintf(stderr, "\n");
-        fprintf(stderr,
-                "  -o, --dsym=FILE\t\tfile to find symbols in\n");
-        fprintf(stderr,
-                "  -v, --verbose\t\t\tenable verbose (debug) messages\n");
-        fprintf(stderr,
-                "  -l, --load-address=ADDRESS\tspecify application load address\n");
-        fprintf(stderr,
-                "  -A, --arch=ARCH\t\tspecify architecture\n");
-        fprintf(stderr,
-                "  -g, --globals\t\t\tlookup symbols using global section\n");
-        fprintf(stderr,
-                "  -c, --no-cache\t\tdon't cache debugging information\n");
-        fprintf(stderr,
-                "  -D, --no-demangle\t\tdon't demangle symbols\n");
-        fprintf(stderr,
-                "  -V, --version\t\t\tget current version\n");
-        fprintf(stderr,
-                "  -h, --help\t\t\tthis help\n");
-        fprintf(stderr, "\n");
-}
-
 void dwarf_error_handler(Dwarf_Error err, Dwarf_Ptr ptr)
 {
         fatal("dwarf error: %s", dwarf_errmsg(err));
