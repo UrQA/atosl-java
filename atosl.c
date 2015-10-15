@@ -398,7 +398,7 @@ void print_symbol(const char *symbol, unsigned offset, char *stacktrace)
         if (name[0] == '_')
                 name++;
 
-        sprintf(stacktrace, "%s%s (in %s) + %d\n",
+        sprintf(stacktrace, "%s%s (in %s) + %d",
                 name,
                 demangled ? "()" : "",
                 basename((char *)options.dsym_filename),
@@ -801,7 +801,7 @@ int print_subprogram_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace)
 
         if (match) {
                 demangled = options.should_demangle ? demangle(match->name) : NULL;
-                sprintf(stacktrace, "%s (in %s) + %d\n",
+                sprintf(stacktrace, "%s (in %s) + %d",
                         demangled ? : match->name,
                         basename((char *)options.dsym_filename),
                         (unsigned int)(addr - match->lowpc));
@@ -915,7 +915,7 @@ int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char 
                         name = symbol ? symbol->name : "(unknown)";
 
                         demangled = options.should_demangle ? demangle(name) : NULL;
-                        sprintf(stacktrace, "%s (in %s) (%s:%d)\n",
+                        sprintf(stacktrace, "%s (in %s) (%s:%d)",
                                 demangled ? demangled : name,
                                 basename((char *)options.dsym_filename),
                                 basename(filename), (int)lineno);
