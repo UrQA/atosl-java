@@ -403,12 +403,6 @@ void print_symbol(const char *symbol, unsigned offset, char *stacktrace)
                 demangled ? "()" : "",
                 basename((char *)options.dsym_filename),
                 offset);
-        printf("%s%s (in %s) + %d\n",
-               name,
-               demangled ? "()" : "",
-               basename((char *)options.dsym_filename),
-               offset);
-
         if (demangled)
                 free(demangled);
 }
@@ -811,10 +805,6 @@ int print_subprogram_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace)
                         demangled ? : match->name,
                         basename((char *)options.dsym_filename),
                         (unsigned int)(addr - match->lowpc));
-                printf("%s (in %s) + %d\n",
-                       demangled ? : match->name,
-                       basename((char *)options.dsym_filename),
-                       (unsigned int)(addr - match->lowpc));
                 if (demangled)
                         free(demangled);
 
@@ -929,11 +919,6 @@ int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char 
                                 demangled ? demangled : name,
                                 basename((char *)options.dsym_filename),
                                 basename(filename), (int)lineno);
-                        printf("%s (in %s) (%s:%d)\n",
-                               demangled ? demangled : name,
-                               basename((char *)options.dsym_filename),
-                               basename(filename), (int)lineno);
-
                         found = 1;
 
                         if (demangled)
