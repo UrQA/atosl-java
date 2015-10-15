@@ -1,4 +1,7 @@
 # atosl-java
+
+[![Build Status](https://travis-ci.org/honeyqa/atosl-java.svg)](https://travis-ci.org/honeyqa/atosl-java)
+
 [atos](https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man1/atos.1.html)**l**(for linux) for java
 
 ## Usage
@@ -29,9 +32,15 @@ make
 ```
 symbolicate(String arch, String executable, String[] addresses, int addressLength);
 ```
+* addresses
+	* addresses[0] : base address
+	* addresses[1+] : runtime addresses
 
 #### Return value
 ---
+* return **String array**
+	* array[0] : status code
+	* array[1+] : symbolication result
 
 | code | status |
 | --- | --- |
