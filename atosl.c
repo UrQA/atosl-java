@@ -195,8 +195,6 @@ char *demangle(const char *sym)
 {
         char *demangled = NULL;
 
-        if (debug)
-                fprintf(stderr, "Unmangled name: %s\n", sym);
         if (strncmp(sym, "_Z", 2) == 0)
                 demangled = cplus_demangle(sym, 0);
         else if (strncmp(sym, "__Z", 3) == 0)
@@ -213,14 +211,6 @@ int parse_uuid(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
         ret = _read(obj->handle, context.uuid, UUID_LEN);
         if (ret < 0)
                 fatal_file(ret);
-
-        if (debug) {
-                fprintf(stderr, "%10s ", "uuid");
-                for (i = 0; i < UUID_LEN; i++) {
-                        fprintf(stderr, "%.02x", context.uuid[i]);
-                }
-                fprintf(stderr, "\n");
-        }
 
         return 0;
 }
@@ -239,22 +229,6 @@ int parse_section(dwarf_mach_object_access_internals_t *obj)
         ret = _read(obj->handle, &s->mach_section, sizeof(s->mach_section));
         if (ret < 0)
                 fatal_file(ret);
-
-        if (debug) {
-                fprintf(stderr, "Section\n");
-                fprintf(stderr, "%10s %s\n", "sectname", s->mach_section.sectname);
-                fprintf(stderr, "%10s %s\n", "segname", s->mach_section.segname);
-                fprintf(stderr, "%10s 0x%.08x\n", "addr", s->mach_section.addr);
-                fprintf(stderr, "%10s 0x%.08x\n", "size", s->mach_section.size);
-                fprintf(stderr, "%10s %d\n", "offset", s->mach_section.offset);
-                /* TODO: what is the second value here? */
-                fprintf(stderr, "%10s 2^%d (?)\n", "align", s->mach_section.align);
-                fprintf(stderr, "%10s %d\n", "reloff", s->mach_section.reloff);
-                fprintf(stderr, "%10s %d\n", "nreloc", s->mach_section.nreloc);
-                fprintf(stderr, "%10s 0x%.08x\n", "flags", s->mach_section.flags);
-                fprintf(stderr, "%10s %d\n", "reserved1", s->mach_section.reserved1);
-                fprintf(stderr, "%10s %d\n", "reserved2", s->mach_section.reserved2);
-        }
 
         struct dwarf_section_t *sec = obj->sections;
         if (!sec)
@@ -290,23 +264,6 @@ int parse_section_64(dwarf_mach_object_access_internals_t *obj)
         if (ret < 0)
                 fatal_file(ret);
 
-        if (debug) {
-                fprintf(stderr, "Section\n");
-                fprintf(stderr, "%10s %s\n", "sectname", s->mach_section.sectname);
-                fprintf(stderr, "%10s %s\n", "segname", s->mach_section.segname);
-                fprintf(stderr, "%10s 0x%.8llx\n", "addr", (unsigned long long)s->mach_section.addr);
-                fprintf(stderr, "%10s 0x%.8llx\n", "size", (unsigned long long)s->mach_section.size);
-                fprintf(stderr, "%10s %d\n", "offset", s->mach_section.offset);
-                /* TODO: what is the second value here? */
-                fprintf(stderr, "%10s 2^%d (?)\n", "align", s->mach_section.align);
-                fprintf(stderr, "%10s %d\n", "reloff", s->mach_section.reloff);
-                fprintf(stderr, "%10s %d\n", "nreloc", s->mach_section.nreloc);
-                fprintf(stderr, "%10s 0x%.08x\n", "flags", s->mach_section.flags);
-                fprintf(stderr, "%10s %d\n", "reserved1", s->mach_section.reserved1);
-                fprintf(stderr, "%10s %d\n", "reserved2", s->mach_section.reserved2);
-                fprintf(stderr, "%10s %d\n", "reserved3", s->mach_section.reserved3);
-        }
-
         struct dwarf_section_64_t *sec = obj->sections_64;
 
         if (!sec) {
@@ -337,18 +294,6 @@ int parse_segment(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
         ret = _read(obj->handle, &segment, sizeof(segment));
         if (ret < 0)
                 fatal_file(ret);
-
-        if (debug) {
-                fprintf(stderr, "Segment: %s\n", segment.segname);
-                fprintf(stderr, "\tvmaddr: 0x%.08x\n", segment.vmaddr);
-                fprintf(stderr, "\tvmsize: %d\n", segment.vmsize);
-                fprintf(stderr, "\tfileoff: 0x%.08x\n", segment.fileoff);
-                fprintf(stderr, "\tfilesize: %d\n", segment.filesize);
-                fprintf(stderr, "\tmaxprot: %d\n", segment.maxprot);
-                fprintf(stderr, "\tinitprot: %d\n", segment.initprot);
-                fprintf(stderr, "\tnsects: %d\n", segment.nsects);
-                fprintf(stderr, "\tflags: %.08x\n", segment.flags);
-        }
 
         if (strcmp(segment.segname, "__TEXT") == 0) {
                 context.intended_addr = segment.vmaddr;
@@ -381,18 +326,6 @@ int parse_segment_64(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize
         ret = _read(obj->handle, &segment, sizeof(segment));
         if (ret < 0)
                 fatal_file(ret);
-
-        if (debug) {
-                fprintf(stderr, "Segment: %s\n", segment.segname);
-                fprintf(stderr, "\tvmaddr: 0x%.8llx\n", (unsigned long long)segment.vmaddr);
-                fprintf(stderr, "\tvmsize: %llu\n", (unsigned long long)segment.vmsize);
-                fprintf(stderr, "\tfileoff: 0x%.8llx\n", (unsigned long long)segment.fileoff);
-                fprintf(stderr, "\tfilesize: %llu\n", (unsigned long long)segment.filesize);
-                fprintf(stderr, "\tmaxprot: %d\n", segment.maxprot);
-                fprintf(stderr, "\tinitprot: %d\n", segment.initprot);
-                fprintf(stderr, "\tnsects: %d\n", segment.nsects);
-                fprintf(stderr, "\tflags: %.08x\n", segment.flags);
-        }
 
         if (strcmp(segment.segname, "__TEXT") == 0) {
                 context.intended_addr = segment.vmaddr;
@@ -428,14 +361,6 @@ int parse_symtab(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
         ret = _read(obj->handle, &symtab, sizeof(symtab));
         if (ret < 0)
                 fatal_file(ret);
-
-        if (debug) {
-                fprintf(stderr, "Symbol\n");
-                fprintf(stderr, "%10s %.08x\n", "symoff", symtab.symoff);
-                fprintf(stderr, "%10s %d\n", "nsyms", symtab.nsyms);
-                fprintf(stderr, "%10s %.08x\n", "stroff", symtab.stroff);
-                fprintf(stderr, "%10s %d\n", "strsize", symtab.strsize);
-        }
 
         strtable = malloc(symtab.strsize);
         if (!strtable)
@@ -492,14 +417,18 @@ static int compare_symbols(const void *a, const void *b)
         return sym_a->addr - sym_b->addr;
 }
 
-void print_symbol(const char *symbol, unsigned offset)
+void print_symbol(const char *symbol, unsigned offset, char *stacktrace)
 {
         char *demangled = options.should_demangle ? demangle(symbol) : NULL;
         const char *name = demangled ? demangled : symbol;
-
         if (name[0] == '_')
                 name++;
 
+        sprintf(stacktrace, "%s%s (in %s) + %d\n",
+                name,
+                demangled ? "()" : "",
+                basename((char *)options.dsym_filename),
+                offset);
         printf("%s%s (in %s) + %d\n",
                name,
                demangled ? "()" : "",
@@ -524,7 +453,7 @@ void print_symbol(const char *symbol, unsigned offset)
  *
  * Return 1 if a symbol corresponding to search_addr was found; 0 otherwise.
  */
-int handle_stabs_symbol(int is_fun_stab, Dwarf_Addr search_addr, const struct symbol_t *symbol)
+int handle_stabs_symbol(int is_fun_stab, Dwarf_Addr search_addr, const struct symbol_t *symbol, char *stacktrace)
 {
         /* These are static since they need to persist across pairs of symbols. */
         static const char *last_fun_name = NULL;
@@ -532,35 +461,23 @@ int handle_stabs_symbol(int is_fun_stab, Dwarf_Addr search_addr, const struct sy
 
         if (is_fun_stab) {
                 if (last_fun_name) { /* if this is non-null, the last symbol was an N_FUN stab as well. */
-                        if (debug)
-                                fprintf(stderr, "\t\tSecond consecutive N_FUN symbol. Function size: %llu (0x%llx)\n",
-                                        symbol->addr, symbol->addr);
                         if (last_addr <= search_addr
                             && search_addr < last_addr + symbol->addr) {
-                                print_symbol(last_fun_name, (unsigned int)(search_addr - last_addr));
+                                print_symbol(last_fun_name, (unsigned int)(search_addr - last_addr), stacktrace);
                                 return 1;
-                        } else if (debug)
-                                fprintf(stderr, "\t\tNot printing symbol %s; 0x%llx not in the interval [0x%llx 0x%llx).\n",
-                                        last_fun_name, search_addr, last_addr, last_addr + symbol->addr);
+                        }
                         last_fun_name = NULL;
                 } else { /* last_fun_name is null, so this is the first N_FUN in (possibly) a pair. */
                         last_fun_name = symbol->name;
-                        if (debug)
-                                fprintf(stderr, "\t\tFirst consecutive N_FUN symbol. Function name: %s; addr: 0x%llx\n",
-                                        symbol->name, symbol->addr);
                 }
         } else {
-                if (debug && last_fun_name) {
-                        fprintf(stderr, "%s", "\t\tN_FUN symbol not part of a pair! Ignoring.\n");
-                        fprintf(stderr, "Name: %s, addr: 0x%llx (%llu)\n", last_fun_name, last_addr, last_addr);
-                }
                 last_fun_name = NULL;
         }
         last_addr = symbol->addr;
         return 0;
 }
 
-int find_and_print_symtab_symbol(Dwarf_Addr slide, Dwarf_Addr addr)
+int find_and_print_symtab_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace)
 {
         union {
                 struct nlist_t nlist32;
@@ -584,42 +501,12 @@ int find_and_print_symtab_symbol(Dwarf_Addr slide, Dwarf_Addr addr)
                 current->addr = context.is_64 ? nlist.nlist64.n_value : nlist.nlist32.n_value;
                 type = context.is_64 ? nlist.nlist64.n_type : nlist.nlist32.n_type;
                 is_stab = type & N_STAB;
-                if (debug) {
-                        fprintf(stderr, "\t\tname: %s\n", current->name);
-                        fprintf(stderr, "\t\tn_un.n_un.n_strx: %d\n", context.is_64 ? nlist.nlist64.n_un.n_strx : nlist.nlist32.n_un.n_strx);
-                        fprintf(stderr, "\t\traw n_type: 0x%x\n", context.is_64 ? nlist.nlist64.n_type : nlist.nlist32.n_type);
-                        fprintf(stderr, "\t\tn_type: ");
-                        if (is_stab)
-                                fprintf(stderr, "N_STAB ");
-                        if ((context.is_64 ? nlist.nlist64.n_type : nlist.nlist32.n_type) & N_PEXT)
-                                fprintf(stderr, "N_PEXT ");
-                        if ((context.is_64 ? nlist.nlist64.n_type : nlist.nlist32.n_type) & N_EXT)
-                                fprintf(stderr, "N_EXT ");
-                        fprintf(stderr, "\n");
 
-                        fprintf(stderr, "\t\tType: ");
-                        switch (type & N_TYPE) {
-                        case 0: fprintf(stderr, "U "); break;
-                        case N_ABS: fprintf(stderr, "A "); break;
-                        case N_SECT: fprintf(stderr, "S "); break;
-                        case N_INDR: fprintf(stderr, "I "); break;
-                        }
-
-                        fprintf(stderr, "\n");
-
-                        fprintf(stderr, "\t\tn_sect: %d\n", context.is_64 ? nlist.nlist64.n_sect : nlist.nlist32.n_sect);
-                        fprintf(stderr, "\t\tn_desc: %d\n", context.is_64 ? nlist.nlist64.n_desc : nlist.nlist32.n_desc);
-                        fprintf(stderr, "\t\tn_value: 0x%llx\n", (unsigned long long)(context.is_64 ? nlist.nlist64.n_value : nlist.nlist32.n_value));
-                        fprintf(stderr, "\t\taddr: 0x%llx\n", current->addr);
-                }
-
-                if (handle_stabs_symbol(is_stab && type == N_FUN, addr, current))
+                if (handle_stabs_symbol(is_stab && type == N_FUN, addr, current, stacktrace))
                         return DW_DLV_OK;
 
                 current++;
 
-                if (debug)
-                        fprintf(stderr, "\n");
         }
 
         qsort(context.symlist, context.nsymbols, sizeof(*current), compare_symbols);
@@ -635,7 +522,7 @@ int find_and_print_symtab_symbol(Dwarf_Addr slide, Dwarf_Addr addr)
                         }
 
                         struct symbol_t *prev = (current - 1);
-                        print_symbol(prev->name, (unsigned int)(addr - prev->addr));
+                        print_symbol(prev->name, (unsigned int)(addr - prev->addr), stacktrace);
                         found = 1;
                         break;
                 }
@@ -665,10 +552,6 @@ int parse_command(
         case LC_SYMTAB:
                 ret = parse_symtab(obj, load_command.cmdsize);
                 break;
-        default:
-                if (debug)
-                        fprintf(stderr, "Warning: unhandled command: 0x%x\n",
-                                load_command.cmd);
         /* Fallthrough */
         case LC_PREPAGE:
                 cmdsize = load_command.cmdsize - sizeof(load_command);
@@ -713,32 +596,14 @@ static int dwarf_mach_object_access_internals_init(
                         fatal_file(ret);
         }
 
-        if (debug) {
-                fprintf(stderr, "Mach Header:\n");
-                fprintf(stderr, "\tCPU Type: %d\n", header.cputype);
-                fprintf(stderr, "\tCPU Subtype: %d\n", header.cpusubtype);
-                fprintf(stderr, "\tFiletype: %d\n", header.filetype);
-                fprintf(stderr, "\tNumber of Cmds: %d\n", header.ncmds);
-                fprintf(stderr, "\tSize of commands: %d\n", header.sizeofcmds);
-                fprintf(stderr, "\tFlags: %.08x\n", header.flags);
-        }
-
         switch (header.filetype) {
-        case MH_DSYM:
-                if (debug)
-                        fprintf(stderr, "File type: debug file\n");
+        case MH_DSYM: // debug file
                 break;
-        case MH_DYLIB:
-                if (debug)
-                        fprintf(stderr, "File type: dynamic library\n");
+        case MH_DYLIB: // dynamic library
                 break;
-        case MH_DYLIB_STUB:
-                if (debug)
-                        fprintf(stderr, "File type: dynamic library stub\n");
+        case MH_DYLIB_STUB: // dynamic library stub
                 break;
-        case MH_EXECUTE:
-                if (debug)
-                        fprintf(stderr, "File type: executable file\n");
+        case MH_EXECUTE: // executable file
                 break;
         default:
                 fatal("unsupported file type: 0x%x", header.filetype);
@@ -749,12 +614,6 @@ static int dwarf_mach_object_access_internals_init(
                 ret = _read(obj->handle, &load_command, sizeof(load_command));
                 if (ret < 0)
                         fatal_file(ret);
-
-                if (debug) {
-                        fprintf(stderr, "Load Command %d\n", i);
-                        fprintf(stderr, "%10s %x\n", "cmd", load_command.cmd);
-                        fprintf(stderr, "%10s %d\n", "cmdsize", load_command.cmdsize);
-                }
 
                 ret = parse_command(obj, load_command);
                 if (ret < 0)
@@ -964,7 +823,7 @@ struct dwarf_subprogram_t *lookup_symbol(Dwarf_Addr addr)
         return NULL;
 }
 
-int print_subprogram_symbol(Dwarf_Addr slide, Dwarf_Addr addr)
+int print_subprogram_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace)
 {
         char *demangled = NULL;
 
@@ -974,6 +833,10 @@ int print_subprogram_symbol(Dwarf_Addr slide, Dwarf_Addr addr)
 
         if (match) {
                 demangled = options.should_demangle ? demangle(match->name) : NULL;
+                sprintf(stacktrace, "%s (in %s) + %d\n",
+                        demangled ? : match->name,
+                        basename((char *)options.dsym_filename),
+                        (unsigned int)(addr - match->lowpc));
                 printf("%s (in %s) + %d\n",
                        demangled ? : match->name,
                        basename((char *)options.dsym_filename),
@@ -986,7 +849,7 @@ int print_subprogram_symbol(Dwarf_Addr slide, Dwarf_Addr addr)
         return match ? 0 : -1;
 }
 
-int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr)
+int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace)
 {
         static Dwarf_Arange *arange_buf = NULL;
         Dwarf_Line *linebuf = NULL;
@@ -1088,7 +951,10 @@ int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr)
                         name = symbol ? symbol->name : "(unknown)";
 
                         demangled = options.should_demangle ? demangle(name) : NULL;
-
+                        sprintf(stacktrace, "%s (in %s) (%s:%d)\n",
+                                demangled ? demangled : name,
+                                basename((char *)options.dsym_filename),
+                                basename(filename), (int)lineno);
                         printf("%s (in %s) (%s:%d)\n",
                                demangled ? demangled : name,
                                basename((char *)options.dsym_filename),
@@ -1112,8 +978,11 @@ int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr)
         return found ? DW_DLV_OK : DW_DLV_NO_ENTRY;
 }
 
-JNIEXPORT jint JNICALL Java_Atosl_symbolicate
+JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
         (JNIEnv * env, jobject jobj, jstring arch, jstring dSYM, jobjectArray adr, jint adrlen){
+        jobjectArray resultArr = (jobjectArray)(*env)->NewObjectArray(env, adrlen,
+                                                                      (*env)->FindClass(env, "java/lang/String"),
+                                                                      (*env)->NewStringUTF(env, ""));
         int fd;
         int ret;
         int i; // for
@@ -1143,9 +1012,14 @@ JNIEXPORT jint JNICALL Java_Atosl_symbolicate
                         break;
                 }
         }
-        if ((cpu_type < 0) && (cpu_subtype < 0))
-                // fatal("unsupported architecture `%s'", optarg);
-                return -1; // unsupported architecture
+        if ((cpu_type < 0) && (cpu_subtype < 0)) {
+                // Release
+                (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                // unsupported architecture
+                (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-1"));
+                return resultArr;
+        }
         options.cpu_type = cpu_type;
         options.cpu_subtype = cpu_subtype;
 
@@ -1153,24 +1027,49 @@ JNIEXPORT jint JNICALL Java_Atosl_symbolicate
         options.dsym_filename = n_dSYM;
 
         fd = open(options.dsym_filename, O_RDONLY);
-        if (fd < 0)
-                // fatal("unable to open `%s': %s", options.dsym_filename, strerror(errno));
-                return -2; // unable to open file
+        if (fd < 0) {
+                // Release
+                (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                // unable to open file
+                (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-2"));
+                return resultArr;
+        }
         ret = _read(fd, &magic, sizeof(magic));
-        if (ret < 0)
-                return -3; // unable to read file
+        if (ret < 0) {
+                // Release
+                (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                // unable to read file
+                (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-3"));
+                return resultArr;
+        }
         if (magic == FAT_CIGAM) {
                 /* Find the architecture we want.. */
                 uint32_t nfat_arch;
 
                 ret = _read(fd, &nfat_arch, sizeof(nfat_arch));
-                if (ret < 0)
-                        return -3; // unable to read file
+                if (ret < 0) {
+                        // Release
+                        (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                        (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                        // unable to read file
+                        (*env)->SetObjectArrayElement(env, resultArr, 0,
+                                                      (*env)->NewStringUTF(env, "-3"));
+                        return resultArr;
+                }
                 nfat_arch = ntohl(nfat_arch);
                 for (i = 0; i < nfat_arch; i++) {
                         ret = _read(fd, &context.arch, sizeof(context.arch));
-                        if (ret < 0)
-                                return -4; // unable to read architecture
+                        if (ret < 0) {
+                                // Release
+                                (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                                // unable to read architecture
+                                (*env)->SetObjectArrayElement(env, resultArr, 0,
+                                                              (*env)->NewStringUTF(env, "-4"));
+                                return resultArr;
+                        }
 
                         context.arch.cputype = ntohl(context.arch.cputype);
                         context.arch.cpusubtype = ntohl(context.arch.cpusubtype);
@@ -1180,13 +1079,25 @@ JNIEXPORT jint JNICALL Java_Atosl_symbolicate
                             (context.arch.cpusubtype == options.cpu_subtype)) {
                                 /* good! */
                                 ret = lseek(fd, context.arch.offset, SEEK_SET);
-                                if (ret < 0)
-                                        return -5; // unable to seek architecture
-
+                                if (ret < 0) {
+                                        // Release
+                                        (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                                        (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                                        // unable to seek architecture
+                                        (*env)->SetObjectArrayElement(env, resultArr, 0,
+                                                                      (*env)->NewStringUTF(env, "-5"));
+                                        return resultArr;
+                                }
                                 ret = _read(fd, &magic, sizeof(magic));
-                                if (ret < 0)
-                                        return -3; // unable to read file
-
+                                if (ret < 0) {
+                                        // Release
+                                        (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                                        (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                                        // unable to read file
+                                        (*env)->SetObjectArrayElement(env, resultArr, 0,
+                                                                      (*env)->NewStringUTF(env, "-3"));
+                                        return resultArr;
+                                }
                                 found = 1;
                                 break;
                         }
@@ -1194,11 +1105,24 @@ JNIEXPORT jint JNICALL Java_Atosl_symbolicate
         } else {
                 found = 1;
         }
-        if (!found)
-                return -6; // architecture not found
-
-        if (magic != MH_MAGIC && magic != MH_MAGIC_64)
-                return -7; // invalid magic for architecture
+        if (!found) {
+                // Release
+                (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                // architecture not found
+                (*env)->SetObjectArrayElement(env, resultArr, 0,
+                                              (*env)->NewStringUTF(env, "-6"));
+                return resultArr;
+        }
+        if (magic != MH_MAGIC && magic != MH_MAGIC_64) {
+                // Release
+                (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                // invalid magic for architecture
+                (*env)->SetObjectArrayElement(env, resultArr, 0,
+                                              (*env)->NewStringUTF(env, "-7"));
+                return resultArr;
+        }
         dwarf_mach_object_access_init(fd, &binary_interface, &derr);
         assert(binary_interface);
 
@@ -1235,19 +1159,38 @@ JNIEXPORT jint JNICALL Java_Atosl_symbolicate
                         Dwarf_Addr addr;
                         errno = 0;
                         addr = strtol(arr_v, (char **)NULL, 16);
-                        if (errno != 0)
-                                return -8; // invalid address
+                        if (errno != 0) {
+                                // Release
+                                (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                                (*env)->ReleaseStringUTFChars(env, lala, lalachar);
+                                (*env)->ReleaseStringUTFChars(env, arr_e, arr_v);
+                                // invalid address
+                                (*env)->SetObjectArrayElement(env, resultArr, 0,
+                                                              (*env)->NewStringUTF(env, "-8"));
+                                return resultArr;
+                        }
+                        char *stacktrace;
+                        stacktrace = malloc(500 * sizeof(char));
                         ret = print_dwarf_symbol(dbg,
                                                  options.load_address - context.intended_addr,
-                                                 addr);
+                                                 addr, stacktrace);
                         if (ret != DW_DLV_OK) {
                                 derr = print_subprogram_symbol(
-                                        options.load_address - context.intended_addr, addr);
+                                        options.load_address - context.intended_addr, addr, stacktrace);
+                        } else {
+                                (*env)->SetObjectArrayElement(env, resultArr, i,
+                                                              (*env)->NewStringUTF(env, stacktrace));
                         }
-
                         if ((ret != DW_DLV_OK) && derr) {
-                                printf("%s\n", arr_v);
+                                (*env)->SetObjectArrayElement(env, resultArr, i,
+                                                              (*env)->NewStringUTF(env, arr_v));
+                        } else {
+                                (*env)->SetObjectArrayElement(env, resultArr, i,
+                                                              (*env)->NewStringUTF(env, stacktrace));
                         }
+                        free(stacktrace);
+                        (*env)->ReleaseStringUTFChars(env, arr_e, arr_v);
                 }
 
                 dwarf_mach_object_access_finish(binary_interface);
@@ -1261,18 +1204,40 @@ JNIEXPORT jint JNICALL Java_Atosl_symbolicate
                         Dwarf_Addr addr;
                         errno = 0;
                         addr = strtol(arr_v, (char **)NULL, 16);
-                        if (errno != 0)
-                                return -8; // invalid address
+                        if (errno != 0) {
+                                // Release
+                                (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                                (*env)->ReleaseStringUTFChars(env, lala, lalachar);
+                                (*env)->ReleaseStringUTFChars(env, arr_e, arr_v);
+                                // invalid address
+                                (*env)->SetObjectArrayElement(env, resultArr, 0,
+                                                              (*env)->NewStringUTF(env, "-8"));
+                                return resultArr;
+                        }
+                        char *stacktrace;
+                        stacktrace = malloc(500 * sizeof(char));
                         ret = find_and_print_symtab_symbol(
                                 options.load_address - context.intended_addr,
-                                addr);
+                                addr, stacktrace);
 
-                        if (ret != DW_DLV_OK)
-                                printf("%s\n", arr_v);
+                        if (ret != DW_DLV_OK) {
+                                (*env)->SetObjectArrayElement(env, resultArr, i,
+                                                              (*env)->NewStringUTF(env, arr_v));
+                        } else {
+                                (*env)->SetObjectArrayElement(env, resultArr, i,
+                                                              (*env)->NewStringUTF(env, stacktrace));
+                        }
+                        free(stacktrace);
+                        (*env)->ReleaseStringUTFChars(env, arr_e, arr_v);
                 }
         }
 
-        close(fd);
-
-        return 0;
+        // Release
+        (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+        (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+        (*env)->ReleaseStringUTFChars(env, lala, lalachar);
+        // invalid address
+        (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "0"));
+        return resultArr;
 }

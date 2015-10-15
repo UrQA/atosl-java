@@ -10,9 +10,9 @@ extern "C" {
 /*
  * Class:     Atosl
  * Method:    symbolicate
- * Signature: (Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;I)I
+ * Signature: (Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;I)[Ljava/lang/String;
  */
-JNIEXPORT jint JNICALL Java_Atosl_symbolicate
+JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
   (JNIEnv *, jobject, jstring, jstring, jobjectArray, jint);
 
 #ifdef __cplusplus
