@@ -1,6 +1,6 @@
 # atosl-java
 
-[![Build Status](https://travis-ci.org/honeyqa/atosl-java.svg)](https://travis-ci.org/honeyqa/atosl-java)
+[![volkswagen status](https://auchenberg.github.io/volkswagen/volkswargen_ci.svg?v=1)](https://github.com/auchenberg/volkswagen)
 
 [atos](https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man1/atos.1.html)**l**(for linux) for java
 
