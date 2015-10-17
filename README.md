@@ -68,3 +68,6 @@ symbolicate(String arch, String executable, String[] addresses, int addressLengt
 
 ## Reference
 * [facebook/Atosl](https://github.com/facebook/atosl)
+* [5dolstory/Atosl](https://github.com/5dolstory/atosl)
+	* [@ Slideshare](http://www.slideshare.net/ssuserff9480/ios-symbolication-53179936)
+	* [@ brunch](https://brunch.co.kr/magazine/symbolication)
