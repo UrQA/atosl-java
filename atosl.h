@@ -9,6 +9,14 @@ extern "C" {
 #endif
 /*
  * Class:     Atosl
+ * Method:    findArch
+ * Signature: (Ljava/lang/String;)[Ljava/lang/String;
+ */
+JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
+  (JNIEnv *, jobject, jstring);
+
+/*
+ * Class:     Atosl
  * Method:    symbolicate
  * Signature: (Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;I)[Ljava/lang/String;
  */

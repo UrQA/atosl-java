@@ -1,4 +1,5 @@
 public class Atosl {
+native String[] findArch(String dSYM);
 native String[] symbolicate(String arch, String dSYM, String[] addresses, int addressLength);
 static {
         System.load("atosl_library_path");

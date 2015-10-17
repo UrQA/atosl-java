@@ -937,6 +937,101 @@ int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char 
         return found ? DW_DLV_OK : DW_DLV_NO_ENTRY;
 }
 
+JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
+        (JNIEnv * env, jobject jobj, jstring dSYM){
+        int i, j, k;
+        int fd;
+        int ret;
+        uint32_t magic;
+
+        const char *n_dSYM = (*env)->GetStringUTFChars(env, dSYM, NULL);
+        jobjectArray resultArr = (jobjectArray)(*env)->NewObjectArray(env, 7,
+                                                                      (*env)->FindClass(env, "java/lang/String"),
+                                                                      (*env)->NewStringUTF(env, ""));
+        fd = open(n_dSYM, O_RDONLY);
+        if (fd < 0) {
+                // Release
+                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                // unable to open file
+                (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-2"));
+                return resultArr;
+        }
+        ret = _read(fd, &magic, sizeof(magic));
+        if (ret < 0) {
+                // Release
+                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                // unable to read file
+                (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-3"));
+                close(fd);
+                return resultArr;
+        }
+        if (magic == FAT_CIGAM) {
+                /* Find the architecture we want.. */
+                uint32_t nfat_arch;
+
+                ret = _read(fd, &nfat_arch, sizeof(nfat_arch));
+                if (ret < 0) {
+                        (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                        // unsupported architecture
+                        (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-1"));
+                        close(fd);
+                        return resultArr;
+                }
+
+                nfat_arch = ntohl(nfat_arch);
+
+                if (nfat_arch == 0) {
+                        (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                        // unable to read fat arch
+                        (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-9"));
+                        close(fd);
+                        return resultArr;
+                }
+                k = 2;
+                for (i = 0; i < nfat_arch; i++) {
+                        ret = _read(fd, &context.arch, sizeof(context.arch));
+                        if (ret < 0) {
+                                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                                // unable to read architecture
+                                (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-4"));
+                                close(fd);
+                                return resultArr;
+                        }
+
+                        int cpu_type = ntohl(context.arch.cputype);
+                        int cpu_subtype = ntohl(context.arch.cpusubtype);
+
+                        for (j = 0; j < NUMOF(arch_str_to_type); j++) {
+                                if((arch_str_to_type[j].type == cpu_type) &&
+                                   arch_str_to_type[j].subtype == cpu_subtype) {
+                                        (*env)->SetObjectArrayElement(env,
+                                                                      resultArr,
+                                                                      k++,
+                                                                      (*env)->NewStringUTF(env, arch_str_to_type[j].name));
+                                }
+                        }
+                }
+                char* cnt;
+                cnt = malloc(2 * sizeof(char));
+                sprintf(cnt, "%d", k-2);
+                (*env)->SetObjectArrayElement(env,
+                                              resultArr,
+                                              1,
+                                              (*env)->NewStringUTF(env, cnt));
+                free(cnt);
+        } else {
+                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                // unable to seek
+                (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-5"));
+                close(fd);
+                return resultArr;
+        }
+        (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "0"));
+        (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+        close(fd);
+        return resultArr;
+}
+
 JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
         (JNIEnv * env, jobject jobj, jstring arch, jstring dSYM, jobjectArray adr, jint adrlen){
         jobjectArray resultArr = (jobjectArray)(*env)->NewObjectArray(env, adrlen,
@@ -1001,6 +1096,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                 (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
                 // unable to read file
                 (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-3"));
+                close(fd);
                 return resultArr;
         }
         if (magic == FAT_CIGAM) {
@@ -1015,6 +1111,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                         // unable to read file
                         (*env)->SetObjectArrayElement(env, resultArr, 0,
                                                       (*env)->NewStringUTF(env, "-3"));
+                        close(fd);
                         return resultArr;
                 }
                 nfat_arch = ntohl(nfat_arch);
@@ -1027,6 +1124,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                                 // unable to read architecture
                                 (*env)->SetObjectArrayElement(env, resultArr, 0,
                                                               (*env)->NewStringUTF(env, "-4"));
+                                close(fd);
                                 return resultArr;
                         }
 
@@ -1045,6 +1143,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                                         // unable to seek architecture
                                         (*env)->SetObjectArrayElement(env, resultArr, 0,
                                                                       (*env)->NewStringUTF(env, "-5"));
+                                        close(fd);
                                         return resultArr;
                                 }
                                 ret = _read(fd, &magic, sizeof(magic));
@@ -1055,6 +1154,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                                         // unable to read file
                                         (*env)->SetObjectArrayElement(env, resultArr, 0,
                                                                       (*env)->NewStringUTF(env, "-3"));
+                                        close(fd);
                                         return resultArr;
                                 }
                                 found = 1;
@@ -1071,6 +1171,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                 // architecture not found
                 (*env)->SetObjectArrayElement(env, resultArr, 0,
                                               (*env)->NewStringUTF(env, "-6"));
+                close(fd);
                 return resultArr;
         }
         if (magic != MH_MAGIC && magic != MH_MAGIC_64) {
@@ -1080,6 +1181,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                 // invalid magic for architecture
                 (*env)->SetObjectArrayElement(env, resultArr, 0,
                                               (*env)->NewStringUTF(env, "-7"));
+                close(fd);
                 return resultArr;
         }
         dwarf_mach_object_access_init(fd, &binary_interface, &derr);
@@ -1127,6 +1229,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                                 // invalid address
                                 (*env)->SetObjectArrayElement(env, resultArr, 0,
                                                               (*env)->NewStringUTF(env, "-8"));
+                                close(fd);
                                 return resultArr;
                         }
                         char *stacktrace;
@@ -1172,6 +1275,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                                 // invalid address
                                 (*env)->SetObjectArrayElement(env, resultArr, 0,
                                                               (*env)->NewStringUTF(env, "-8"));
+                                close(fd);
                                 return resultArr;
                         }
                         char *stacktrace;
@@ -1198,5 +1302,6 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
         (*env)->ReleaseStringUTFChars(env, lala, lalachar);
         // invalid address
         (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "0"));
+        close(fd);
         return resultArr;
 }
