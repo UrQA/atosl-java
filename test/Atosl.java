@@ -2,7 +2,7 @@ public class Atosl {
 native String[] findArch(String dSYM);
 native String[] symbolicate(String arch, String dSYM, String[] addresses, int addressLength);
 static {
-        System.load("/Users/devholic/Desktop/git/honeyqa/atosl-java/test/libatosl.so");
+        System.load("atosl_library_path");
 }
 static public void main(String argv[]) {
         String test1_Address[] = {"0xcf000","0x0017ddd5"};
