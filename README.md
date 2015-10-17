@@ -38,9 +38,15 @@ symbolicate(String arch, String executable, String[] addresses, int addressLengt
 
 #### Return value
 ---
-* return **String array**
-	* array[0] : status code
-	* array[1+] : symbolication result
+* findArch
+	* return **String array**
+		* array[0] : status code
+		* array[1] : architecture count
+		* array[2+] : architecture name
+* symbolicate
+	* return **String array**
+		* array[0] : status code
+		* array[1+] : symbolication result
 
 | code | status |
 | --- | --- |
@@ -53,6 +59,7 @@ symbolicate(String arch, String executable, String[] addresses, int addressLengt
 | -6 | architecture not found |
 | -7 | invalid magic for architecture |
 | -8 | invalid memory address |
+| -9 | unable to read fat arch |
 
 
 ## Example
