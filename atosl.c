@@ -56,8 +56,6 @@ _dwarf_decode_u_leb128(Dwarf_Small * leb128,
                 ptr += uleblen;                               \
         } while (0)
 
-static int debug = 0;
-
 static struct {
         const char *name;
         cpu_type_t type;
