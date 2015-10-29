@@ -58,21 +58,6 @@ _dwarf_decode_u_leb128(Dwarf_Small * leb128,
 
 static int debug = 0;
 
-static const char *shortopts = "vl:o:A:gcC:VhD";
-static struct option longopts[] = {
-        {"verbose", no_argument, NULL, 'v'},
-        {"load-address", required_argument, NULL, 'l'},
-        {"no-demangle", no_argument, NULL, 'D'},
-        {"dsym", required_argument, NULL, 'o'},
-        {"arch", required_argument, NULL, 'A'},
-        {"globals", no_argument, NULL, 'g'},
-        {"no-cache", no_argument, NULL, 'c'},
-        {"cache-dir", required_argument, NULL, 'C'},
-        {"version", no_argument, NULL, 'V'},
-        {"help", no_argument, NULL, 'h'},
-        {NULL, 0, NULL, 0}
-};
-
 static struct {
         const char *name;
         cpu_type_t type;
