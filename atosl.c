@@ -160,7 +160,7 @@ char *demangle(const char *sym)
         return demangled;
 }
 
-int parse_uuid(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
+int parse_uuid(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize, Context *context)
 {
         int i;
         int ret;
@@ -241,7 +241,7 @@ int parse_section_64(dwarf_mach_object_access_internals_t *obj)
         return 0;
 }
 
-int parse_segment(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
+int parse_segment(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize, Context *context)
 {
         int err;
         int ret;
@@ -273,7 +273,7 @@ int parse_segment(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
         return 0;
 }
 
-int parse_segment_64(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
+int parse_segment_64(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize, Context *context)
 {
         int err;
         int ret;
@@ -305,7 +305,7 @@ int parse_segment_64(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize
         return 0;
 }
 
-int parse_symtab(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
+int parse_symtab(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize, Context *context)
 {
         int ret;
         off_t pos;
@@ -485,23 +485,23 @@ int find_and_print_symtab_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stackt
 
 int parse_command(
         dwarf_mach_object_access_internals_t *obj,
-        struct load_command_t load_command)
+        struct load_command_t load_command, Context *context)
 {
         int ret = 0;
         int cmdsize;
 
         switch (load_command.cmd) {
         case LC_UUID:
-                ret = parse_uuid(obj, load_command.cmdsize);
+                ret = parse_uuid(obj, load_command.cmdsize, context);
                 break;
         case LC_SEGMENT:
-                ret = parse_segment(obj, load_command.cmdsize);
+                ret = parse_segment(obj, load_command.cmdsize, context);
                 break;
         case LC_SEGMENT_64:
-                ret = parse_segment_64(obj, load_command.cmdsize);
+                ret = parse_segment_64(obj, load_command.cmdsize, context);
                 break;
         case LC_SYMTAB:
-                ret = parse_symtab(obj, load_command.cmdsize);
+                ret = parse_symtab(obj, load_command.cmdsize, context);
                 break;
         /* Fallthrough */
         case LC_PREPAGE:
@@ -518,7 +518,8 @@ int parse_command(
 int dwarf_mach_object_access_internals_init(
         dwarf_mach_handle handle,
         void *obj_in,
-        int *error)
+        int *error,
+        Context *context)
 {
         int ret;
         struct mach_header_t header;
@@ -566,7 +567,7 @@ int dwarf_mach_object_access_internals_init(
                 if (ret < 0)
                         fatal_file(ret);
 
-                ret = parse_command(obj, load_command);
+                ret = parse_command(obj, load_command, context);
                 if (ret < 0)
                         fatal("unable to parse command %x", load_command.cmd);
         }
@@ -723,7 +724,8 @@ const struct Dwarf_Obj_Access_Methods_s
 void dwarf_mach_object_access_init(
         dwarf_mach_handle handle,
         Dwarf_Obj_Access_Interface **ret_obj,
-        int *err)
+        int *err,
+        Context *context)
 {
         int res = 0;
         dwarf_mach_object_access_internals_t *internals = NULL;
@@ -734,7 +736,7 @@ void dwarf_mach_object_access_init(
                 fatal("unable to allocate memory");
 
         memset(internals, 0, sizeof(*internals));
-        res = dwarf_mach_object_access_internals_init(handle, internals, err);
+        res = dwarf_mach_object_access_internals_init(handle, internals, err, context);
         if (res != DW_DLV_OK)
                 fatal("error initializing dwarf internals");
 
@@ -758,7 +760,7 @@ void dwarf_mach_object_access_finish(Dwarf_Obj_Access_Interface *obj)
         free(obj);
 }
 
-struct dwarf_subprogram_t *lookup_symbol(Dwarf_Addr addr)
+struct dwarf_subprogram_t *lookup_symbol(Dwarf_Addr addr, Context *context)
 {
         struct dwarf_subprogram_t *subprogram = context.subprograms;
 
@@ -774,13 +776,13 @@ struct dwarf_subprogram_t *lookup_symbol(Dwarf_Addr addr)
         return NULL;
 }
 
-int print_subprogram_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace)
+int print_subprogram_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace, Options *options, Context *context)
 {
         char *demangled = NULL;
 
         addr -= slide;
 
-        struct dwarf_subprogram_t *match = lookup_symbol(addr);
+        struct dwarf_subprogram_t *match = lookup_symbol(addr, context);
 
         if (match) {
                 demangled = options.should_demangle ? demangle(match->name) : NULL;
@@ -796,7 +798,7 @@ int print_subprogram_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace)
         return match ? 0 : -1;
 }
 
-int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace)
+int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace, Options *options, Context *context)
 {
         Dwarf_Arange *arange_buf = NULL;
         Dwarf_Line *linebuf = NULL;
@@ -893,7 +895,7 @@ int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char 
                         ret = dwarf_diename(cu_die, &diename, &err);
                         DWARF_ASSERT(ret, err);
 
-                        symbol = lookup_symbol(addr);
+                        symbol = lookup_symbol(addr, context);
 
                         name = symbol ? symbol->name : "(unknown)";
 
@@ -927,6 +929,18 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
         int ret;
         uint32_t magic;
 
+        Context *context;
+        context = malloc(sizeof(*context));
+        Options *options;
+        options = malloc(sizeof(*options));
+        // Option initialize
+        options.load_address = LONG_MAX;
+        options.use_globals = 0;
+        options.use_cache = 1;
+        options.cpu_type = CPU_TYPE_ARM;
+        options.cpu_subtype = CPU_SUBTYPE_ARM_V7S;
+        options.should_demangle = 1;
+
         const char *n_dSYM = (*env)->GetStringUTFChars(env, dSYM, NULL);
         jobjectArray resultArr = (jobjectArray)(*env)->NewObjectArray(env, 7,
                                                                       (*env)->FindClass(env, "java/lang/String"),
@@ -937,6 +951,8 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
                 (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
                 // unable to open file
                 (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-2"));
+                free(context);
+                free(options);
                 return resultArr;
         }
         ret = _read(fd, &magic, sizeof(magic));
@@ -946,6 +962,8 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
                 // unable to read file
                 (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-3"));
                 close(fd);
+                free(context);
+                free(options);
                 return resultArr;
         }
         if (magic == FAT_CIGAM) {
@@ -958,6 +976,8 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
                         // unsupported architecture
                         (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-1"));
                         close(fd);
+                        free(context);
+                        free(options);
                         return resultArr;
                 }
 
@@ -968,6 +988,8 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
                         // unable to read fat arch
                         (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-9"));
                         close(fd);
+                        free(context);
+                        free(options);
                         return resultArr;
                 }
                 k = 2;
@@ -978,6 +1000,8 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
                                 // unable to read architecture
                                 (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-4"));
                                 close(fd);
+                                free(context);
+                                free(options);
                                 return resultArr;
                         }
 
@@ -1007,11 +1031,15 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
                 // unable to seek
                 (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-5"));
                 close(fd);
+                free(context);
+                free(options);
                 return resultArr;
         }
         (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "0"));
         (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
         close(fd);
+        free(context);
+        free(options);
         return resultArr;
 }
 
@@ -1194,7 +1222,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                 free(options);
                 return resultArr;
         }
-        dwarf_mach_object_access_init(fd, &binary_interface, &derr);
+        dwarf_mach_object_access_init(fd, &binary_interface, &derr, context);
         assert(binary_interface);
 
         if (options.load_address == LONG_MAX)
@@ -1248,10 +1276,10 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                         stacktrace = malloc(500 * sizeof(char));
                         ret = print_dwarf_symbol(dbg,
                                                  options.load_address - context.intended_addr,
-                                                 addr, stacktrace);
+                                                 addr, stacktrace, options, context);
                         if (ret != DW_DLV_OK) {
                                 derr = print_subprogram_symbol(
-                                        options.load_address - context.intended_addr, addr, stacktrace);
+                                        options.load_address - context.intended_addr, addr, stacktrace, options, context);
                         } else {
                                 (*env)->SetObjectArrayElement(env, resultArr, i,
                                                               (*env)->NewStringUTF(env, stacktrace));
