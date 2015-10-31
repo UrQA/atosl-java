@@ -84,7 +84,7 @@ struct function_t {
 };
 
 /* Various addresses, parsed from the cmdline or the mach-o sections */
-typedef struct opts {
+typedef struct aopts {
         Dwarf_Addr load_address;
         int use_globals;
         int use_cache;
@@ -134,6 +134,7 @@ typedef struct {
         Dwarf_Unsigned section_count;
         struct dwarf_section_t *sections;
         struct dwarf_section_64_t *sections_64;
+        Context *ictxt;
 } dwarf_mach_object_access_internals_t;
 
 void dwarf_error_handler(Dwarf_Error err, Dwarf_Ptr ptr)
@@ -155,7 +156,6 @@ char *demangle(const char *sym)
 
 int parse_uuid(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize, Context *context)
 {
-        int i;
         int ret;
 
         ret = _read(obj->handle, context->uuid, UUID_LEN);
@@ -352,11 +352,9 @@ int parse_symtab(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize, Co
 
                 current++;
         }
-
         ret = lseek(obj->handle, pos, SEEK_SET);
         if (ret < 0)
                 fatal("error seeking: %s", strerror(errno));
-
         return 0;
 }
 
@@ -400,8 +398,8 @@ void print_symbol(const char *symbol, unsigned offset, char *stacktrace, Options
 int handle_stabs_symbol(int is_fun_stab, Dwarf_Addr search_addr, const struct symbol_t *symbol, char *stacktrace, Options *options)
 {
         /* These are static since they need to persist across pairs of symbols. */
-        const char *last_fun_name = NULL;
-        Dwarf_Addr last_addr;
+        static const char *last_fun_name = NULL;
+        static Dwarf_Addr last_addr;
 
         if (is_fun_stab) {
                 if (last_fun_name) { /* if this is non-null, the last symbol was an N_FUN stab as well. */
@@ -528,6 +526,7 @@ int dwarf_mach_object_access_internals_init(
         obj->endianness = DW_OBJECT_LSB;
         obj->sections = NULL;
         obj->sections_64 = NULL;
+        obj->ictxt = context;
 
         ret = _read(obj->handle, &header, sizeof(header));
         if (ret < 0)
@@ -629,8 +628,7 @@ int dwarf_mach_object_access_load_section(
         void *obj_in,
         Dwarf_Half section_index,
         Dwarf_Small **section_data,
-        int *error,
-        Context *context)
+        int *error)
 {
         void *addr;
         int i;
@@ -652,7 +650,7 @@ int dwarf_mach_object_access_load_section(
                 addr = malloc(sec->mach_section.size);
                 if (!addr)
                         fatal("unable to allocate memory");
-                ret = lseek(obj->handle, context->arch.offset + sec->mach_section.offset, SEEK_SET);
+                ret = lseek(obj->handle, obj->ictxt->arch.offset + sec->mach_section.offset, SEEK_SET);
                 if (ret < 0)
                         fatal("error seeking: %s", strerror(errno));
                 ret = _read(obj->handle, addr, sec->mach_section.size);
@@ -667,7 +665,7 @@ int dwarf_mach_object_access_load_section(
                 addr = malloc(sec->mach_section.size);
                 if (!addr)
                         fatal("unable to allocate memory");
-                ret = lseek(obj->handle, context->arch.offset + sec->mach_section.offset, SEEK_SET);
+                ret = lseek(obj->handle, obj->ictxt->arch.offset + sec->mach_section.offset, SEEK_SET);
                 if (ret < 0)
                         fatal("error seeking: %s", strerror(errno));
                 ret = _read(obj->handle, addr, sec->mach_section.size);
@@ -713,7 +711,6 @@ const struct Dwarf_Obj_Access_Methods_s
         dwarf_mach_object_access_load_section,
         dwarf_mach_object_relocate_a_section
 };
-
 
 void dwarf_mach_object_access_init(
         dwarf_mach_handle handle,
@@ -794,7 +791,7 @@ int print_subprogram_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace,
 
 int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace, Options *options, Context *context)
 {
-        Dwarf_Arange *arange_buf = NULL;
+        static Dwarf_Arange *arange_buf = NULL;
         Dwarf_Line *linebuf = NULL;
         Dwarf_Signed linecount = 0;
         Dwarf_Off cu_die_offset = 0;
@@ -804,7 +801,7 @@ int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char 
         Dwarf_Addr start = 0;
         Dwarf_Unsigned length = 0;
         Dwarf_Arange arange;
-        Dwarf_Signed count;
+        static Dwarf_Signed count;
         int ret;
         Dwarf_Error err;
         int i;
@@ -930,7 +927,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
         // Option initialize
         options->load_address = LONG_MAX;
         options->use_globals = 0;
-        options->use_cache = 1;
+        options->use_cache = 0;
         options->cpu_type = CPU_TYPE_ARM;
         options->cpu_subtype = CPU_SUBTYPE_ARM_V7S;
         options->should_demangle = 1;
@@ -1001,7 +998,6 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
 
                         int cpu_type = ntohl(context->arch.cputype);
                         int cpu_subtype = ntohl(context->arch.cpusubtype);
-
                         for (j = 0; j < NUMOF(arch_str_to_type); j++) {
                                 if((arch_str_to_type[j].type == cpu_type) &&
                                    arch_str_to_type[j].subtype == cpu_subtype) {
@@ -1050,24 +1046,27 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
         int derr = 0;
         Dwarf_Obj_Access_Interface *binary_interface = NULL;
         Dwarf_Ptr errarg = NULL;
-        int option_index;
-        int c;
         int found = 0;
         uint32_t magic;
         cpu_type_t cpu_type = -1;
         cpu_subtype_t cpu_subtype = -1;
         Dwarf_Addr address;
+
         Context *context;
         context = malloc(sizeof(*context));
+        // Context initialize
+        context->is_64 = 0;
+
         Options *options;
         options = malloc(sizeof(*options));
         // Option initialize
         options->load_address = LONG_MAX;
         options->use_globals = 0;
-        options->use_cache = 1;
+        options->use_cache = 0;
         options->cpu_type = CPU_TYPE_ARM;
         options->cpu_subtype = CPU_SUBTYPE_ARM_V7S;
         options->should_demangle = 1;
+
         // load from java
         const char *n_arch = (*env)->GetStringUTFChars(env, arch, NULL);
         const char *n_dSYM = (*env)->GetStringUTFChars(env, dSYM, NULL);
@@ -1155,7 +1154,6 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                         context->arch.cputype = ntohl(context->arch.cputype);
                         context->arch.cpusubtype = ntohl(context->arch.cpusubtype);
                         context->arch.offset = ntohl(context->arch.offset);
-
                         if ((context->arch.cputype == options->cpu_type) &&
                             (context->arch.cpusubtype == options->cpu_subtype)) {
                                 /* good! */
@@ -1238,14 +1236,12 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                         .persistent = options->use_cache,
                         .cache_dir = options->cache_dir,
                 };
-
                 context->subprograms =
                         subprograms_load(dbg,
                                          context->uuid,
                                          options->use_globals ? SUBPROGRAMS_GLOBALS :
                                          SUBPROGRAMS_CUS,
                                          &opts);
-
                 for (i = 1; i < adrlen; i++) {
                         jstring arr_e = (jstring) (*env)->GetObjectArrayElement(env, adr, i);
                         const char *arr_v = (*env)->GetStringUTFChars(env, arr_e, 0);
