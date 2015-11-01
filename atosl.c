@@ -123,6 +123,12 @@ typedef struct ctxt {
         uint8_t uuid[UUID_LEN];
         uint8_t is_64;
         uint8_t is_dwarf;
+
+        const char *last_fun_name;
+        Dwarf_Addr last_addr;
+
+        Dwarf_Arange *arange_buf;
+        Dwarf_Signed count;
 } Context;
 
 typedef struct {
@@ -395,27 +401,25 @@ void print_symbol(const char *symbol, unsigned offset, char *stacktrace, Options
  *
  * Return 1 if a symbol corresponding to search_addr was found; 0 otherwise.
  */
-int handle_stabs_symbol(int is_fun_stab, Dwarf_Addr search_addr, const struct symbol_t *symbol, char *stacktrace, Options *options)
+int handle_stabs_symbol(int is_fun_stab, Dwarf_Addr search_addr, const struct symbol_t *symbol, char *stacktrace, Options *options, Context *context)
 {
         /* These are static since they need to persist across pairs of symbols. */
-        static const char *last_fun_name = NULL;
-        static Dwarf_Addr last_addr;
 
         if (is_fun_stab) {
-                if (last_fun_name) { /* if this is non-null, the last symbol was an N_FUN stab as well. */
-                        if (last_addr <= search_addr
-                            && search_addr < last_addr + symbol->addr) {
-                                print_symbol(last_fun_name, (unsigned int)(search_addr - last_addr), stacktrace, options);
+                if (context->last_fun_name) { /* if this is non-null, the last symbol was an N_FUN stab as well. */
+                        if (context->last_addr <= search_addr
+                            && search_addr < context->last_addr + symbol->addr) {
+                                print_symbol(context->last_fun_name, (unsigned int)(search_addr - context->last_addr), stacktrace, options);
                                 return 1;
                         }
-                        last_fun_name = NULL;
+                        context->last_fun_name = NULL;
                 } else { /* last_fun_name is null, so this is the first N_FUN in (possibly) a pair. */
-                        last_fun_name = symbol->name;
+                        context->last_fun_name = symbol->name;
                 }
         } else {
-                last_fun_name = NULL;
+                context->last_fun_name = NULL;
         }
-        last_addr = symbol->addr;
+        context->last_addr = symbol->addr;
         return 0;
 }
 
@@ -444,7 +448,7 @@ int find_and_print_symtab_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stackt
                 type = context->is_64 ? nlist.nlist64.n_type : nlist.nlist32.n_type;
                 is_stab = type & N_STAB;
 
-                if (handle_stabs_symbol(is_stab && type == N_FUN, addr, current, stacktrace, options))
+                if (handle_stabs_symbol(is_stab && type == N_FUN, addr, current, stacktrace, options, context))
                         return DW_DLV_OK;
 
                 current++;
@@ -791,7 +795,7 @@ int print_subprogram_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace,
 
 int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace, Options *options, Context *context)
 {
-        static Dwarf_Arange *arange_buf = NULL;
+        // static Dwarf_Arange *arange_buf = NULL;
         Dwarf_Line *linebuf = NULL;
         Dwarf_Signed linecount = 0;
         Dwarf_Off cu_die_offset = 0;
@@ -801,7 +805,7 @@ int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char 
         Dwarf_Addr start = 0;
         Dwarf_Unsigned length = 0;
         Dwarf_Arange arange;
-        static Dwarf_Signed count;
+        // static Dwarf_Signed count;
         int ret;
         Dwarf_Error err;
         int i;
@@ -809,12 +813,13 @@ int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char 
 
         addr -= slide;
 
-        if (!arange_buf) {
-                ret = dwarf_get_aranges(dbg, &arange_buf, &count, &err);
+        if (!context->arange_buf) {
+                // &arange_buf &count
+                ret = dwarf_get_aranges(dbg, &context->arange_buf, &context->count, &err);
                 DWARF_ASSERT(ret, err);
         }
 
-        ret = dwarf_get_arange(arange_buf, count, addr, &arange, &err);
+        ret = dwarf_get_arange(context->arange_buf, context->count, addr, &arange, &err);
         DWARF_ASSERT(ret, err);
 
         if (ret == DW_DLV_NO_ENTRY)
@@ -922,6 +927,11 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
 
         Context *context;
         context = malloc(sizeof(*context));
+        // Context initialize
+        context->is_64 = 0;
+        context->last_fun_name = NULL;
+        context->arange_buf = NULL;
+        
         Options *options;
         options = malloc(sizeof(*options));
         // Option initialize
@@ -1056,6 +1066,8 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
         context = malloc(sizeof(*context));
         // Context initialize
         context->is_64 = 0;
+        context->last_fun_name = NULL;
+        context->arange_buf = NULL;
 
         Options *options;
         options = malloc(sizeof(*options));
