@@ -84,7 +84,7 @@ struct function_t {
 };
 
 /* Various addresses, parsed from the cmdline or the mach-o sections */
-static struct {
+typedef struct aopts {
         Dwarf_Addr load_address;
         int use_globals;
         int use_cache;
@@ -93,14 +93,7 @@ static struct {
         cpu_subtype_t cpu_subtype;
         const char *cache_dir;
         int should_demangle;
-} options = {
-        .load_address = LONG_MAX,
-        .use_globals = 0,
-        .use_cache = 1,
-        .cpu_type = CPU_TYPE_ARM,
-        .cpu_subtype = CPU_SUBTYPE_ARM_V7S,
-        .should_demangle = 1,
-};
+} Options;
 
 typedef int dwarf_mach_handle;
 
@@ -116,7 +109,7 @@ struct dwarf_section_64_t {
         struct dwarf_section_64_t *next;
 };
 
-static struct {
+typedef struct ctxt {
         /* Symbols from symtab */
         struct symbol_t *symlist;
         uint32_t nsymbols;
@@ -130,7 +123,13 @@ static struct {
         uint8_t uuid[UUID_LEN];
         uint8_t is_64;
         uint8_t is_dwarf;
-} context;
+
+        const char *last_fun_name;
+        Dwarf_Addr last_addr;
+
+        Dwarf_Arange *arange_buf;
+        Dwarf_Signed count;
+} Context;
 
 typedef struct {
         dwarf_mach_handle handle;
@@ -141,6 +140,7 @@ typedef struct {
         Dwarf_Unsigned section_count;
         struct dwarf_section_t *sections;
         struct dwarf_section_64_t *sections_64;
+        Context *ictxt;
 } dwarf_mach_object_access_internals_t;
 
 void dwarf_error_handler(Dwarf_Error err, Dwarf_Ptr ptr)
@@ -160,12 +160,11 @@ char *demangle(const char *sym)
         return demangled;
 }
 
-int parse_uuid(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
+int parse_uuid(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize, Context *context)
 {
-        int i;
         int ret;
 
-        ret = _read(obj->handle, context.uuid, UUID_LEN);
+        ret = _read(obj->handle, context->uuid, UUID_LEN);
         if (ret < 0)
                 fatal_file(ret);
 
@@ -241,7 +240,7 @@ int parse_section_64(dwarf_mach_object_access_internals_t *obj)
         return 0;
 }
 
-int parse_segment(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
+int parse_segment(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize, Context *context)
 {
         int err;
         int ret;
@@ -253,15 +252,15 @@ int parse_segment(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
                 fatal_file(ret);
 
         if (strcmp(segment.segname, "__TEXT") == 0) {
-                context.intended_addr = segment.vmaddr;
+                context->intended_addr = segment.vmaddr;
         }
 
         if (strcmp(segment.segname, "__LINKEDIT") == 0) {
-                context.linkedit_addr = segment.fileoff;
+                context->linkedit_addr = segment.fileoff;
         }
 
         if (strcmp(segment.segname, "__DWARF") == 0) {
-                context.is_dwarf = 1;
+                context->is_dwarf = 1;
         }
 
         for (i = 0; i < segment.nsects; i++) {
@@ -273,7 +272,7 @@ int parse_segment(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
         return 0;
 }
 
-int parse_segment_64(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
+int parse_segment_64(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize, Context *context)
 {
         int err;
         int ret;
@@ -285,15 +284,15 @@ int parse_segment_64(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize
                 fatal_file(ret);
 
         if (strcmp(segment.segname, "__TEXT") == 0) {
-                context.intended_addr = segment.vmaddr;
+                context->intended_addr = segment.vmaddr;
         }
 
         if (strcmp(segment.segname, "__LINKEDIT") == 0) {
-                context.linkedit_addr = segment.fileoff;
+                context->linkedit_addr = segment.fileoff;
         }
 
         if (strcmp(segment.segname, "__DWARF") == 0) {
-                context.is_dwarf = 1;
+                context->is_dwarf = 1;
         }
 
         for (i = 0; i < segment.nsects; i++) {
@@ -305,7 +304,7 @@ int parse_segment_64(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize
         return 0;
 }
 
-int parse_symtab(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
+int parse_symtab(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize, Context *context)
 {
         int ret;
         off_t pos;
@@ -327,7 +326,7 @@ int parse_symtab(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
         if (pos < 0)
                 fatal("error seeking: %s", strerror(errno));
 
-        ret = lseek(obj->handle, context.arch.offset+symtab.stroff, SEEK_SET);
+        ret = lseek(obj->handle, context->arch.offset+symtab.stroff, SEEK_SET);
         if (ret < 0)
                 fatal("error seeking: %s", strerror(errno));
 
@@ -335,48 +334,46 @@ int parse_symtab(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize)
         if (ret < 0)
                 fatal_file(ret);
 
-        ret = lseek(obj->handle, context.arch.offset+symtab.symoff, SEEK_SET);
+        ret = lseek(obj->handle, context->arch.offset+symtab.symoff, SEEK_SET);
         if (ret < 0)
                 fatal("error seeking: %s", strerror(errno));
 
-        context.nsymbols = symtab.nsyms;
-        context.symlist = malloc(sizeof(struct symbol_t) * symtab.nsyms);
-        if (!context.symlist)
+        context->nsymbols = symtab.nsyms;
+        context->symlist = malloc(sizeof(struct symbol_t) * symtab.nsyms);
+        if (!context->symlist)
                 fatal("unable to allocate memory");
-        current = context.symlist;
+        current = context->symlist;
 
         for (i = 0; i < symtab.nsyms; i++) {
-                ret = _read(obj->handle, context.is_64 ? (void*)&current->sym.sym64 : (void*)&current->sym.sym32, context.is_64 ? sizeof(current->sym.sym64) : sizeof(current->sym.sym32));
+                ret = _read(obj->handle, context->is_64 ? (void*)&current->sym.sym64 : (void*)&current->sym.sym32, context->is_64 ? sizeof(current->sym.sym64) : sizeof(current->sym.sym32));
                 if (ret < 0)
                         fatal_file(ret);
 
-                if (context.is_64 ? current->sym.sym64.n_un.n_strx : current->sym.sym32.n_un.n_strx) {
-                        if ((context.is_64 ? current->sym.sym64.n_un.n_strx : current->sym.sym32.n_un.n_strx) > symtab.strsize)
+                if (context->is_64 ? current->sym.sym64.n_un.n_strx : current->sym.sym32.n_un.n_strx) {
+                        if ((context->is_64 ? current->sym.sym64.n_un.n_strx : current->sym.sym32.n_un.n_strx) > symtab.strsize)
                                 fatal("str offset (%d) greater than strsize (%d)",
-                                      (context.is_64 ? current->sym.sym64.n_un.n_strx : current->sym.sym32.n_un.n_strx), symtab.strsize);
-                        current->name = strtable+(context.is_64 ? current->sym.sym64.n_un.n_strx : current->sym.sym32.n_un.n_strx);
+                                      (context->is_64 ? current->sym.sym64.n_un.n_strx : current->sym.sym32.n_un.n_strx), symtab.strsize);
+                        current->name = strtable+(context->is_64 ? current->sym.sym64.n_un.n_strx : current->sym.sym32.n_un.n_strx);
                 }
 
                 current++;
         }
-
         ret = lseek(obj->handle, pos, SEEK_SET);
         if (ret < 0)
                 fatal("error seeking: %s", strerror(errno));
-
         return 0;
 }
 
-static int compare_symbols(const void *a, const void *b)
+int compare_symbols(const void *a, const void *b)
 {
         struct symbol_t *sym_a = (struct symbol_t *)a;
         struct symbol_t *sym_b = (struct symbol_t *)b;
         return sym_a->addr - sym_b->addr;
 }
 
-void print_symbol(const char *symbol, unsigned offset, char *stacktrace)
+void print_symbol(const char *symbol, unsigned offset, char *stacktrace, Options *options)
 {
-        char *demangled = options.should_demangle ? demangle(symbol) : NULL;
+        char *demangled = options->should_demangle ? demangle(symbol) : NULL;
         const char *name = demangled ? demangled : symbol;
         if (name[0] == '_')
                 name++;
@@ -384,7 +381,7 @@ void print_symbol(const char *symbol, unsigned offset, char *stacktrace)
         sprintf(stacktrace, "%s%s (in %s) + %d",
                 name,
                 demangled ? "()" : "",
-                basename((char *)options.dsym_filename),
+                basename((char *)options->dsym_filename),
                 offset);
         if (demangled)
                 free(demangled);
@@ -404,31 +401,29 @@ void print_symbol(const char *symbol, unsigned offset, char *stacktrace)
  *
  * Return 1 if a symbol corresponding to search_addr was found; 0 otherwise.
  */
-int handle_stabs_symbol(int is_fun_stab, Dwarf_Addr search_addr, const struct symbol_t *symbol, char *stacktrace)
+int handle_stabs_symbol(int is_fun_stab, Dwarf_Addr search_addr, const struct symbol_t *symbol, char *stacktrace, Options *options, Context *context)
 {
         /* These are static since they need to persist across pairs of symbols. */
-        static const char *last_fun_name = NULL;
-        static Dwarf_Addr last_addr;
 
         if (is_fun_stab) {
-                if (last_fun_name) { /* if this is non-null, the last symbol was an N_FUN stab as well. */
-                        if (last_addr <= search_addr
-                            && search_addr < last_addr + symbol->addr) {
-                                print_symbol(last_fun_name, (unsigned int)(search_addr - last_addr), stacktrace);
+                if (context->last_fun_name) { /* if this is non-null, the last symbol was an N_FUN stab as well. */
+                        if (context->last_addr <= search_addr
+                            && search_addr < context->last_addr + symbol->addr) {
+                                print_symbol(context->last_fun_name, (unsigned int)(search_addr - context->last_addr), stacktrace, options);
                                 return 1;
                         }
-                        last_fun_name = NULL;
+                        context->last_fun_name = NULL;
                 } else { /* last_fun_name is null, so this is the first N_FUN in (possibly) a pair. */
-                        last_fun_name = symbol->name;
+                        context->last_fun_name = symbol->name;
                 }
         } else {
-                last_fun_name = NULL;
+                context->last_fun_name = NULL;
         }
-        last_addr = symbol->addr;
+        context->last_addr = symbol->addr;
         return 0;
 }
 
-int find_and_print_symtab_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace)
+int find_and_print_symtab_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace, Options *options, Context *context)
 {
         union {
                 struct nlist_t nlist32;
@@ -442,28 +437,28 @@ int find_and_print_symtab_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stackt
         uint8_t type;
 
         addr = addr - slide;
-        current = context.symlist;
+        current = context->symlist;
 
-        for (i = 0; i < context.nsymbols; i++) {
+        for (i = 0; i < context->nsymbols; i++) {
 
-                memcpy(context.is_64 ? (void*)&nlist.nlist64 : (void*)&nlist.nlist32, context.is_64 ? (void*)&current->sym.sym64 : (void*)&current->sym.sym32, context.is_64 ? sizeof(current->sym.sym64) : sizeof(current->sym.sym32));
-                current->thumb = ((context.is_64 ? nlist.nlist64.n_desc : nlist.nlist32.n_desc) & N_ARM_THUMB_DEF) ? 1 : 0;
+                memcpy(context->is_64 ? (void*)&nlist.nlist64 : (void*)&nlist.nlist32, context->is_64 ? (void*)&current->sym.sym64 : (void*)&current->sym.sym32, context->is_64 ? sizeof(current->sym.sym64) : sizeof(current->sym.sym32));
+                current->thumb = ((context->is_64 ? nlist.nlist64.n_desc : nlist.nlist32.n_desc) & N_ARM_THUMB_DEF) ? 1 : 0;
 
-                current->addr = context.is_64 ? nlist.nlist64.n_value : nlist.nlist32.n_value;
-                type = context.is_64 ? nlist.nlist64.n_type : nlist.nlist32.n_type;
+                current->addr = context->is_64 ? nlist.nlist64.n_value : nlist.nlist32.n_value;
+                type = context->is_64 ? nlist.nlist64.n_type : nlist.nlist32.n_type;
                 is_stab = type & N_STAB;
 
-                if (handle_stabs_symbol(is_stab && type == N_FUN, addr, current, stacktrace))
+                if (handle_stabs_symbol(is_stab && type == N_FUN, addr, current, stacktrace, options, context))
                         return DW_DLV_OK;
 
                 current++;
 
         }
 
-        qsort(context.symlist, context.nsymbols, sizeof(*current), compare_symbols);
-        current = context.symlist;
+        qsort(context->symlist, context->nsymbols, sizeof(*current), compare_symbols);
+        current = context->symlist;
 
-        for (i = 0; i < context.nsymbols; i++) {
+        for (i = 0; i < context->nsymbols; i++) {
                 if (current->addr > addr) {
                         if (i < 1) {
                                 /* Someone is asking about a symbol that comes before the first
@@ -473,7 +468,7 @@ int find_and_print_symtab_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stackt
                         }
 
                         struct symbol_t *prev = (current - 1);
-                        print_symbol(prev->name, (unsigned int)(addr - prev->addr), stacktrace);
+                        print_symbol(prev->name, (unsigned int)(addr - prev->addr), stacktrace, options);
                         found = 1;
                         break;
                 }
@@ -485,23 +480,23 @@ int find_and_print_symtab_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stackt
 
 int parse_command(
         dwarf_mach_object_access_internals_t *obj,
-        struct load_command_t load_command)
+        struct load_command_t load_command, Context *context)
 {
         int ret = 0;
         int cmdsize;
 
         switch (load_command.cmd) {
         case LC_UUID:
-                ret = parse_uuid(obj, load_command.cmdsize);
+                ret = parse_uuid(obj, load_command.cmdsize, context);
                 break;
         case LC_SEGMENT:
-                ret = parse_segment(obj, load_command.cmdsize);
+                ret = parse_segment(obj, load_command.cmdsize, context);
                 break;
         case LC_SEGMENT_64:
-                ret = parse_segment_64(obj, load_command.cmdsize);
+                ret = parse_segment_64(obj, load_command.cmdsize, context);
                 break;
         case LC_SYMTAB:
-                ret = parse_symtab(obj, load_command.cmdsize);
+                ret = parse_symtab(obj, load_command.cmdsize, context);
                 break;
         /* Fallthrough */
         case LC_PREPAGE:
@@ -515,10 +510,11 @@ int parse_command(
         return ret;
 }
 
-static int dwarf_mach_object_access_internals_init(
+int dwarf_mach_object_access_internals_init(
         dwarf_mach_handle handle,
         void *obj_in,
-        int *error)
+        int *error,
+        Context *context)
 {
         int ret;
         struct mach_header_t header;
@@ -534,6 +530,7 @@ static int dwarf_mach_object_access_internals_init(
         obj->endianness = DW_OBJECT_LSB;
         obj->sections = NULL;
         obj->sections_64 = NULL;
+        obj->ictxt = context;
 
         ret = _read(obj->handle, &header, sizeof(header));
         if (ret < 0)
@@ -541,7 +538,7 @@ static int dwarf_mach_object_access_internals_init(
 
         /* Need to skip 4 bytes of the reserved field of mach_header_64  */
         if (header.cputype == CPU_TYPE_ARM64 && header.cpusubtype == CPU_SUBTYPE_ARM64_ALL) {
-                context.is_64 = 1;
+                context->is_64 = 1;
                 ret = lseek(obj->handle, sizeof(uint32_t), SEEK_CUR);
                 if (ret < 0)
                         fatal_file(ret);
@@ -566,7 +563,7 @@ static int dwarf_mach_object_access_internals_init(
                 if (ret < 0)
                         fatal_file(ret);
 
-                ret = parse_command(obj, load_command);
+                ret = parse_command(obj, load_command, context);
                 if (ret < 0)
                         fatal("unable to parse command %x", load_command.cmd);
         }
@@ -574,21 +571,21 @@ static int dwarf_mach_object_access_internals_init(
         return DW_DLV_OK;
 }
 
-static Dwarf_Endianness dwarf_mach_object_access_get_byte_order(void *obj_in)
+Dwarf_Endianness dwarf_mach_object_access_get_byte_order(void *obj_in)
 {
         dwarf_mach_object_access_internals_t *obj =
                 (dwarf_mach_object_access_internals_t *)obj_in;
         return obj->endianness;
 }
 
-static Dwarf_Unsigned dwarf_mach_object_access_get_section_count(void *obj_in)
+Dwarf_Unsigned dwarf_mach_object_access_get_section_count(void *obj_in)
 {
         dwarf_mach_object_access_internals_t *obj =
                 (dwarf_mach_object_access_internals_t *)obj_in;
         return obj->section_count;
 }
 
-static int dwarf_mach_object_access_get_section_info(
+int dwarf_mach_object_access_get_section_info(
         void *obj_in,
         Dwarf_Half section_index,
         Dwarf_Obj_Access_Section *ret_scn,
@@ -631,7 +628,7 @@ static int dwarf_mach_object_access_get_section_info(
         return DW_DLV_OK;
 }
 
-static int dwarf_mach_object_access_load_section(
+int dwarf_mach_object_access_load_section(
         void *obj_in,
         Dwarf_Half section_index,
         Dwarf_Small **section_data,
@@ -657,7 +654,7 @@ static int dwarf_mach_object_access_load_section(
                 addr = malloc(sec->mach_section.size);
                 if (!addr)
                         fatal("unable to allocate memory");
-                ret = lseek(obj->handle, context.arch.offset + sec->mach_section.offset, SEEK_SET);
+                ret = lseek(obj->handle, obj->ictxt->arch.offset + sec->mach_section.offset, SEEK_SET);
                 if (ret < 0)
                         fatal("error seeking: %s", strerror(errno));
                 ret = _read(obj->handle, addr, sec->mach_section.size);
@@ -672,7 +669,7 @@ static int dwarf_mach_object_access_load_section(
                 addr = malloc(sec->mach_section.size);
                 if (!addr)
                         fatal("unable to allocate memory");
-                ret = lseek(obj->handle, context.arch.offset + sec->mach_section.offset, SEEK_SET);
+                ret = lseek(obj->handle, obj->ictxt->arch.offset + sec->mach_section.offset, SEEK_SET);
                 if (ret < 0)
                         fatal("error seeking: %s", strerror(errno));
                 ret = _read(obj->handle, addr, sec->mach_section.size);
@@ -685,7 +682,7 @@ static int dwarf_mach_object_access_load_section(
         return DW_DLV_OK;
 }
 
-static int dwarf_mach_object_relocate_a_section(
+int dwarf_mach_object_relocate_a_section(
         void *obj_in,
         Dwarf_Half section_index,
         Dwarf_Debug dbg,
@@ -694,21 +691,21 @@ static int dwarf_mach_object_relocate_a_section(
         return DW_DLV_NO_ENTRY;
 }
 
-static Dwarf_Small dwarf_mach_object_access_get_length_size(void *obj_in)
+Dwarf_Small dwarf_mach_object_access_get_length_size(void *obj_in)
 {
         dwarf_mach_object_access_internals_t *obj =
                 (dwarf_mach_object_access_internals_t *)obj_in;
         return obj->length_size;
 }
 
-static Dwarf_Small dwarf_mach_object_access_get_pointer_size(void *obj_in)
+Dwarf_Small dwarf_mach_object_access_get_pointer_size(void *obj_in)
 {
         dwarf_mach_object_access_internals_t *obj =
                 (dwarf_mach_object_access_internals_t *)obj_in;
         return obj->pointer_size;
 }
 
-static const struct Dwarf_Obj_Access_Methods_s
+const struct Dwarf_Obj_Access_Methods_s
         dwarf_mach_object_access_methods = {
         dwarf_mach_object_access_get_section_info,
         dwarf_mach_object_access_get_byte_order,
@@ -719,11 +716,11 @@ static const struct Dwarf_Obj_Access_Methods_s
         dwarf_mach_object_relocate_a_section
 };
 
-
 void dwarf_mach_object_access_init(
         dwarf_mach_handle handle,
         Dwarf_Obj_Access_Interface **ret_obj,
-        int *err)
+        int *err,
+        Context *context)
 {
         int res = 0;
         dwarf_mach_object_access_internals_t *internals = NULL;
@@ -734,7 +731,7 @@ void dwarf_mach_object_access_init(
                 fatal("unable to allocate memory");
 
         memset(internals, 0, sizeof(*internals));
-        res = dwarf_mach_object_access_internals_init(handle, internals, err);
+        res = dwarf_mach_object_access_internals_init(handle, internals, err, context);
         if (res != DW_DLV_OK)
                 fatal("error initializing dwarf internals");
 
@@ -758,9 +755,9 @@ void dwarf_mach_object_access_finish(Dwarf_Obj_Access_Interface *obj)
         free(obj);
 }
 
-struct dwarf_subprogram_t *lookup_symbol(Dwarf_Addr addr)
+struct dwarf_subprogram_t *lookup_symbol(Dwarf_Addr addr, Context *context)
 {
-        struct dwarf_subprogram_t *subprogram = context.subprograms;
+        struct dwarf_subprogram_t *subprogram = context->subprograms;
 
         while (subprogram) {
                 if ((addr >= subprogram->lowpc) &&
@@ -774,19 +771,19 @@ struct dwarf_subprogram_t *lookup_symbol(Dwarf_Addr addr)
         return NULL;
 }
 
-int print_subprogram_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace)
+int print_subprogram_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace, Options *options, Context *context)
 {
         char *demangled = NULL;
 
         addr -= slide;
 
-        struct dwarf_subprogram_t *match = lookup_symbol(addr);
+        struct dwarf_subprogram_t *match = lookup_symbol(addr, context);
 
         if (match) {
-                demangled = options.should_demangle ? demangle(match->name) : NULL;
+                demangled = options->should_demangle ? demangle(match->name) : NULL;
                 sprintf(stacktrace, "%s (in %s) + %d",
                         demangled ? : match->name,
-                        basename((char *)options.dsym_filename),
+                        basename((char *)options->dsym_filename),
                         (unsigned int)(addr - match->lowpc));
                 if (demangled)
                         free(demangled);
@@ -796,9 +793,9 @@ int print_subprogram_symbol(Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace)
         return match ? 0 : -1;
 }
 
-int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace)
+int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char *stacktrace, Options *options, Context *context)
 {
-        static Dwarf_Arange *arange_buf = NULL;
+        // static Dwarf_Arange *arange_buf = NULL;
         Dwarf_Line *linebuf = NULL;
         Dwarf_Signed linecount = 0;
         Dwarf_Off cu_die_offset = 0;
@@ -808,7 +805,7 @@ int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char 
         Dwarf_Addr start = 0;
         Dwarf_Unsigned length = 0;
         Dwarf_Arange arange;
-        static Dwarf_Signed count;
+        // static Dwarf_Signed count;
         int ret;
         Dwarf_Error err;
         int i;
@@ -816,12 +813,13 @@ int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char 
 
         addr -= slide;
 
-        if (!arange_buf) {
-                ret = dwarf_get_aranges(dbg, &arange_buf, &count, &err);
+        if (!context->arange_buf) {
+                // &arange_buf &count
+                ret = dwarf_get_aranges(dbg, &context->arange_buf, &context->count, &err);
                 DWARF_ASSERT(ret, err);
         }
 
-        ret = dwarf_get_arange(arange_buf, count, addr, &arange, &err);
+        ret = dwarf_get_arange(context->arange_buf, context->count, addr, &arange, &err);
         DWARF_ASSERT(ret, err);
 
         if (ret == DW_DLV_NO_ENTRY)
@@ -893,14 +891,14 @@ int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char 
                         ret = dwarf_diename(cu_die, &diename, &err);
                         DWARF_ASSERT(ret, err);
 
-                        symbol = lookup_symbol(addr);
+                        symbol = lookup_symbol(addr, context);
 
                         name = symbol ? symbol->name : "(unknown)";
 
-                        demangled = options.should_demangle ? demangle(name) : NULL;
+                        demangled = options->should_demangle ? demangle(name) : NULL;
                         sprintf(stacktrace, "%s (in %s) (%s:%d)",
                                 demangled ? demangled : name,
-                                basename((char *)options.dsym_filename),
+                                basename((char *)options->dsym_filename),
                                 basename(filename), (int)lineno);
                         found = 1;
 
@@ -927,6 +925,23 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
         int ret;
         uint32_t magic;
 
+        Context *context;
+        context = malloc(sizeof(*context));
+        // Context initialize
+        context->is_64 = 0;
+        context->last_fun_name = NULL;
+        context->arange_buf = NULL;
+        
+        Options *options;
+        options = malloc(sizeof(*options));
+        // Option initialize
+        options->load_address = LONG_MAX;
+        options->use_globals = 0;
+        options->use_cache = 0;
+        options->cpu_type = CPU_TYPE_ARM;
+        options->cpu_subtype = CPU_SUBTYPE_ARM_V7S;
+        options->should_demangle = 1;
+
         const char *n_dSYM = (*env)->GetStringUTFChars(env, dSYM, NULL);
         jobjectArray resultArr = (jobjectArray)(*env)->NewObjectArray(env, 7,
                                                                       (*env)->FindClass(env, "java/lang/String"),
@@ -937,6 +952,8 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
                 (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
                 // unable to open file
                 (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-2"));
+                free(context);
+                free(options);
                 return resultArr;
         }
         ret = _read(fd, &magic, sizeof(magic));
@@ -946,6 +963,8 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
                 // unable to read file
                 (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-3"));
                 close(fd);
+                free(context);
+                free(options);
                 return resultArr;
         }
         if (magic == FAT_CIGAM) {
@@ -958,6 +977,8 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
                         // unsupported architecture
                         (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-1"));
                         close(fd);
+                        free(context);
+                        free(options);
                         return resultArr;
                 }
 
@@ -968,22 +989,25 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
                         // unable to read fat arch
                         (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-9"));
                         close(fd);
+                        free(context);
+                        free(options);
                         return resultArr;
                 }
                 k = 2;
                 for (i = 0; i < nfat_arch; i++) {
-                        ret = _read(fd, &context.arch, sizeof(context.arch));
+                        ret = _read(fd, &context->arch, sizeof(context->arch));
                         if (ret < 0) {
                                 (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
                                 // unable to read architecture
                                 (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-4"));
                                 close(fd);
+                                free(context);
+                                free(options);
                                 return resultArr;
                         }
 
-                        int cpu_type = ntohl(context.arch.cputype);
-                        int cpu_subtype = ntohl(context.arch.cpusubtype);
-
+                        int cpu_type = ntohl(context->arch.cputype);
+                        int cpu_subtype = ntohl(context->arch.cpusubtype);
                         for (j = 0; j < NUMOF(arch_str_to_type); j++) {
                                 if((arch_str_to_type[j].type == cpu_type) &&
                                    arch_str_to_type[j].subtype == cpu_subtype) {
@@ -1007,11 +1031,15 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
                 // unable to seek
                 (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-5"));
                 close(fd);
+                free(context);
+                free(options);
                 return resultArr;
         }
         (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "0"));
         (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
         close(fd);
+        free(context);
+        free(options);
         return resultArr;
 }
 
@@ -1028,15 +1056,29 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
         int derr = 0;
         Dwarf_Obj_Access_Interface *binary_interface = NULL;
         Dwarf_Ptr errarg = NULL;
-        int option_index;
-        int c;
         int found = 0;
         uint32_t magic;
         cpu_type_t cpu_type = -1;
         cpu_subtype_t cpu_subtype = -1;
         Dwarf_Addr address;
 
-        memset(&context, 0, sizeof(context));
+        Context *context;
+        context = malloc(sizeof(*context));
+        // Context initialize
+        context->is_64 = 0;
+        context->last_fun_name = NULL;
+        context->arange_buf = NULL;
+
+        Options *options;
+        options = malloc(sizeof(*options));
+        // Option initialize
+        options->load_address = LONG_MAX;
+        options->use_globals = 0;
+        options->use_cache = 0;
+        options->cpu_type = CPU_TYPE_ARM;
+        options->cpu_subtype = CPU_SUBTYPE_ARM_V7S;
+        options->should_demangle = 1;
+
         // load from java
         const char *n_arch = (*env)->GetStringUTFChars(env, arch, NULL);
         const char *n_dSYM = (*env)->GetStringUTFChars(env, dSYM, NULL);
@@ -1055,21 +1097,25 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                 (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
                 // unsupported architecture
                 (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-1"));
+                free(context);
+                free(options);
                 return resultArr;
         }
-        options.cpu_type = cpu_type;
-        options.cpu_subtype = cpu_subtype;
+        options->cpu_type = cpu_type;
+        options->cpu_subtype = cpu_subtype;
 
         // filename
-        options.dsym_filename = n_dSYM;
+        options->dsym_filename = n_dSYM;
 
-        fd = open(options.dsym_filename, O_RDONLY);
+        fd = open(options->dsym_filename, O_RDONLY);
         if (fd < 0) {
                 // Release
                 (*env)->ReleaseStringUTFChars(env, arch, n_arch);
                 (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
                 // unable to open file
                 (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-2"));
+                free(context);
+                free(options);
                 return resultArr;
         }
         ret = _read(fd, &magic, sizeof(magic));
@@ -1080,6 +1126,8 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                 // unable to read file
                 (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-3"));
                 close(fd);
+                free(context);
+                free(options);
                 return resultArr;
         }
         if (magic == FAT_CIGAM) {
@@ -1095,11 +1143,13 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                         (*env)->SetObjectArrayElement(env, resultArr, 0,
                                                       (*env)->NewStringUTF(env, "-3"));
                         close(fd);
+                        free(context);
+                        free(options);
                         return resultArr;
                 }
                 nfat_arch = ntohl(nfat_arch);
                 for (i = 0; i < nfat_arch; i++) {
-                        ret = _read(fd, &context.arch, sizeof(context.arch));
+                        ret = _read(fd, &context->arch, sizeof(context->arch));
                         if (ret < 0) {
                                 // Release
                                 (*env)->ReleaseStringUTFChars(env, arch, n_arch);
@@ -1108,17 +1158,18 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                                 (*env)->SetObjectArrayElement(env, resultArr, 0,
                                                               (*env)->NewStringUTF(env, "-4"));
                                 close(fd);
+                                free(context);
+                                free(options);
                                 return resultArr;
                         }
 
-                        context.arch.cputype = ntohl(context.arch.cputype);
-                        context.arch.cpusubtype = ntohl(context.arch.cpusubtype);
-                        context.arch.offset = ntohl(context.arch.offset);
-
-                        if ((context.arch.cputype == options.cpu_type) &&
-                            (context.arch.cpusubtype == options.cpu_subtype)) {
+                        context->arch.cputype = ntohl(context->arch.cputype);
+                        context->arch.cpusubtype = ntohl(context->arch.cpusubtype);
+                        context->arch.offset = ntohl(context->arch.offset);
+                        if ((context->arch.cputype == options->cpu_type) &&
+                            (context->arch.cpusubtype == options->cpu_subtype)) {
                                 /* good! */
-                                ret = lseek(fd, context.arch.offset, SEEK_SET);
+                                ret = lseek(fd, context->arch.offset, SEEK_SET);
                                 if (ret < 0) {
                                         // Release
                                         (*env)->ReleaseStringUTFChars(env, arch, n_arch);
@@ -1127,6 +1178,8 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                                         (*env)->SetObjectArrayElement(env, resultArr, 0,
                                                                       (*env)->NewStringUTF(env, "-5"));
                                         close(fd);
+                                        free(context);
+                                        free(options);
                                         return resultArr;
                                 }
                                 ret = _read(fd, &magic, sizeof(magic));
@@ -1138,6 +1191,8 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                                         (*env)->SetObjectArrayElement(env, resultArr, 0,
                                                                       (*env)->NewStringUTF(env, "-3"));
                                         close(fd);
+                                        free(context);
+                                        free(options);
                                         return resultArr;
                                 }
                                 found = 1;
@@ -1155,6 +1210,8 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                 (*env)->SetObjectArrayElement(env, resultArr, 0,
                                               (*env)->NewStringUTF(env, "-6"));
                 close(fd);
+                free(context);
+                free(options);
                 return resultArr;
         }
         if (magic != MH_MAGIC && magic != MH_MAGIC_64) {
@@ -1165,38 +1222,38 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                 (*env)->SetObjectArrayElement(env, resultArr, 0,
                                               (*env)->NewStringUTF(env, "-7"));
                 close(fd);
+                free(context);
+                free(options);
                 return resultArr;
         }
-        dwarf_mach_object_access_init(fd, &binary_interface, &derr);
+        dwarf_mach_object_access_init(fd, &binary_interface, &derr, context);
         assert(binary_interface);
 
-        if (options.load_address == LONG_MAX)
-                options.load_address = context.intended_addr;
+        if (options->load_address == LONG_MAX)
+                options->load_address = context->intended_addr;
         // load-address
         jstring lala = (jstring) (*env)->GetObjectArrayElement(env, adr, 0);
         const char *lalachar = (*env)->GetStringUTFChars(env, lala, 0);
         address = strtol(lalachar, (char **)NULL, 16);
-        options.load_address = address;
+        options->load_address = address;
         ret = dwarf_object_init(binary_interface,
                                 dwarf_error_handler,
                                 errarg, &dbg, &err);
         DWARF_ASSERT(ret, err);
         /* If there is dwarf info we'll use that to parse, otherwise we'll use the
          * symbol table */
-        if (context.is_dwarf && ret == DW_DLV_OK) {
+        if (context->is_dwarf && ret == DW_DLV_OK) {
 
                 struct subprograms_options_t opts = {
-                        .persistent = options.use_cache,
-                        .cache_dir = options.cache_dir,
+                        .persistent = options->use_cache,
+                        .cache_dir = options->cache_dir,
                 };
-
-                context.subprograms =
+                context->subprograms =
                         subprograms_load(dbg,
-                                         context.uuid,
-                                         options.use_globals ? SUBPROGRAMS_GLOBALS :
+                                         context->uuid,
+                                         options->use_globals ? SUBPROGRAMS_GLOBALS :
                                          SUBPROGRAMS_CUS,
                                          &opts);
-
                 for (i = 1; i < adrlen; i++) {
                         jstring arr_e = (jstring) (*env)->GetObjectArrayElement(env, adr, i);
                         const char *arr_v = (*env)->GetStringUTFChars(env, arr_e, 0);
@@ -1213,16 +1270,18 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                                 (*env)->SetObjectArrayElement(env, resultArr, 0,
                                                               (*env)->NewStringUTF(env, "-8"));
                                 close(fd);
+                                free(context);
+                                free(options);
                                 return resultArr;
                         }
                         char *stacktrace;
                         stacktrace = malloc(500 * sizeof(char));
                         ret = print_dwarf_symbol(dbg,
-                                                 options.load_address - context.intended_addr,
-                                                 addr, stacktrace);
+                                                 options->load_address - context->intended_addr,
+                                                 addr, stacktrace, options, context);
                         if (ret != DW_DLV_OK) {
                                 derr = print_subprogram_symbol(
-                                        options.load_address - context.intended_addr, addr, stacktrace);
+                                        options->load_address - context->intended_addr, addr, stacktrace, options, context);
                         } else {
                                 (*env)->SetObjectArrayElement(env, resultArr, i,
                                                               (*env)->NewStringUTF(env, stacktrace));
@@ -1259,13 +1318,15 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
                                 (*env)->SetObjectArrayElement(env, resultArr, 0,
                                                               (*env)->NewStringUTF(env, "-8"));
                                 close(fd);
+                                free(context);
+                                free(options);
                                 return resultArr;
                         }
                         char *stacktrace;
                         stacktrace = malloc(500 * sizeof(char));
                         ret = find_and_print_symtab_symbol(
-                                options.load_address - context.intended_addr,
-                                addr, stacktrace);
+                                options->load_address - context->intended_addr,
+                                addr, stacktrace, options, context);
 
                         if (ret != DW_DLV_OK) {
                                 (*env)->SetObjectArrayElement(env, resultArr, i,
@@ -1286,5 +1347,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
         // invalid address
         (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "0"));
         close(fd);
+        free(context);
+        free(options);
         return resultArr;
 }
