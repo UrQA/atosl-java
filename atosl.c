@@ -931,7 +931,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
         context->is_64 = 0;
         context->last_fun_name = NULL;
         context->arange_buf = NULL;
-        
+
         Options *options;
         options = malloc(sizeof(*options));
         // Option initialize
@@ -1041,6 +1041,11 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
         free(context);
         free(options);
         return resultArr;
+}
+
+JNIEXPORT jobjectArray JNICALL Java_Atosl_checkUUID
+        (JNIEnv * env, jobject jobj, jstring dSYM, jobjectArray arch, jint archlen)){
+
 }
 
 JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate

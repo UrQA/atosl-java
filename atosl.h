@@ -17,6 +17,14 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
 
 /*
  * Class:     Atosl
+ * Method:    checkUUID
+ * Signature: (Ljava/lang/String;[Ljava/lang/String;I)[Ljava/lang/String;
+ */
+JNIEXPORT jobjectArray JNICALL Java_Atosl_checkUUID
+  (JNIEnv *, jobject, jstring, jobjectArray, jint);
+
+/*
+ * Class:     Atosl
  * Method:    symbolicate
  * Signature: (Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;I)[Ljava/lang/String;
  */
