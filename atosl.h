@@ -18,10 +18,10 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
 /*
  * Class:     Atosl
  * Method:    checkUUID
- * Signature: (Ljava/lang/String;[Ljava/lang/String;I)[Ljava/lang/String;
+ * Signature: (Ljava/lang/String;Ljava/lang/String;)[Ljava/lang/String;
  */
 JNIEXPORT jobjectArray JNICALL Java_Atosl_checkUUID
-  (JNIEnv *, jobject, jstring, jobjectArray, jint);
+  (JNIEnv *, jobject, jstring, jstring);
 
 /*
  * Class:     Atosl
