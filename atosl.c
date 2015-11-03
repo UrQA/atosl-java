@@ -121,6 +121,8 @@ typedef struct ctxt {
         struct fat_arch_t arch;
 
         uint8_t uuid[UUID_LEN];
+        char uuid_str[UUID_LEN * 2 + 1];
+
         uint8_t is_64;
         uint8_t is_dwarf;
 
@@ -167,6 +169,11 @@ int parse_uuid(dwarf_mach_object_access_internals_t *obj, uint32_t cmdsize, Cont
         ret = _read(obj->handle, context->uuid, UUID_LEN);
         if (ret < 0)
                 fatal_file(ret);
+
+        sprintf(context->uuid_str, "%.02x%.02x%.02x%.02x%.02x%.02x%.02x%.02x%.02x%.02x%.02x%.02x%.02x%.02x%.02x%.02x",
+                context->uuid[0],context->uuid[1],context->uuid[2],context->uuid[3],context->uuid[4],context->uuid[5],
+                context->uuid[6],context->uuid[7],context->uuid[8],context->uuid[9],context->uuid[10],context->uuid[11],
+                context->uuid[12],context->uuid[13],context->uuid[14],context->uuid[15]);
 
         return 0;
 }
@@ -931,7 +938,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
         context->is_64 = 0;
         context->last_fun_name = NULL;
         context->arange_buf = NULL;
-        
+
         Options *options;
         options = malloc(sizeof(*options));
         // Option initialize
@@ -1037,6 +1044,199 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
         }
         (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "0"));
         (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+        close(fd);
+        free(context);
+        free(options);
+        return resultArr;
+}
+
+JNIEXPORT jobjectArray JNICALL Java_Atosl_checkUUID
+        (JNIEnv * env, jobject jobj, jstring arch, jstring dSYM){
+        jobjectArray resultArr = (jobjectArray)(*env)->NewObjectArray(env, 2,
+                                                                      (*env)->FindClass(env, "java/lang/String"),
+                                                                      (*env)->NewStringUTF(env, ""));
+        int fd;
+        int ret;
+        int i = 0;
+        int found = 0;
+        uint32_t magic;
+        cpu_type_t cpu_type = -1;
+        cpu_subtype_t cpu_subtype = -1;
+        int derr = 0;
+        Dwarf_Obj_Access_Interface *binary_interface = NULL;
+
+        Context *context;
+        context = malloc(sizeof(*context));
+        // Context initialize
+        context->is_64 = 0;
+        context->last_fun_name = NULL;
+        context->arange_buf = NULL;
+
+        Options *options;
+        options = malloc(sizeof(*options));
+        // Option initialize
+        options->load_address = LONG_MAX;
+        options->use_globals = 0;
+        options->use_cache = 0;
+        options->cpu_type = CPU_TYPE_ARM;
+        options->cpu_subtype = CPU_SUBTYPE_ARM_V7S;
+        options->should_demangle = 1;
+
+        // load from java
+        const char *n_arch = (*env)->GetStringUTFChars(env, arch, NULL);
+        const char *n_dSYM = (*env)->GetStringUTFChars(env, dSYM, NULL);
+
+        // check CPU architecture
+        for (i = 0; i < NUMOF(arch_str_to_type); i++) {
+                if (strcmp(arch_str_to_type[i].name, n_arch) == 0) {
+                        cpu_type = arch_str_to_type[i].type;
+                        cpu_subtype = arch_str_to_type[i].subtype;
+                        break;
+                }
+        }
+        if ((cpu_type < 0) && (cpu_subtype < 0)) {
+                // Release
+                (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                // unsupported architecture
+                (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-1"));
+                free(context);
+                free(options);
+                return resultArr;
+        }
+
+        options->cpu_type = cpu_type;
+        options->cpu_subtype = cpu_subtype;
+
+        // filename
+        options->dsym_filename = n_dSYM;
+
+        fd = open(n_dSYM, O_RDONLY);
+        if (fd < 0) {
+                // Release
+                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                // unable to open file
+                (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-2"));
+                free(context);
+                free(options);
+                return resultArr;
+        }
+        ret = _read(fd, &magic, sizeof(magic));
+        if (ret < 0) {
+                // Release
+                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                // unable to read file
+                (*env)->SetObjectArrayElement(env, resultArr, 0, (*env)->NewStringUTF(env, "-3"));
+                close(fd);
+                free(context);
+                free(options);
+                return resultArr;
+        }
+        if (magic == FAT_CIGAM) {
+                /* Find the architecture we want.. */
+                uint32_t nfat_arch;
+
+                ret = _read(fd, &nfat_arch, sizeof(nfat_arch));
+                if (ret < 0) {
+                        // Release
+                        (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                        (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                        // unable to read file
+                        (*env)->SetObjectArrayElement(env, resultArr, 0,
+                                                      (*env)->NewStringUTF(env, "-3"));
+                        close(fd);
+                        free(context);
+                        free(options);
+                        return resultArr;
+                }
+                nfat_arch = ntohl(nfat_arch);
+                for (i = 0; i < nfat_arch; i++) {
+                        ret = _read(fd, &context->arch, sizeof(context->arch));
+                        if (ret < 0) {
+                                // Release
+                                (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                                // unable to read architecture
+                                (*env)->SetObjectArrayElement(env, resultArr, 0,
+                                                              (*env)->NewStringUTF(env, "-4"));
+                                close(fd);
+                                free(context);
+                                free(options);
+                                return resultArr;
+                        }
+
+                        context->arch.cputype = ntohl(context->arch.cputype);
+                        context->arch.cpusubtype = ntohl(context->arch.cpusubtype);
+                        context->arch.offset = ntohl(context->arch.offset);
+                        if ((context->arch.cputype == options->cpu_type) &&
+                            (context->arch.cpusubtype == options->cpu_subtype)) {
+                                /* good! */
+                                ret = lseek(fd, context->arch.offset, SEEK_SET);
+                                if (ret < 0) {
+                                        // Release
+                                        (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                                        (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                                        // unable to seek architecture
+                                        (*env)->SetObjectArrayElement(env, resultArr, 0,
+                                                                      (*env)->NewStringUTF(env, "-5"));
+                                        close(fd);
+                                        free(context);
+                                        free(options);
+                                        return resultArr;
+                                }
+                                ret = _read(fd, &magic, sizeof(magic));
+                                if (ret < 0) {
+                                        // Release
+                                        (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                                        (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                                        // unable to read file
+                                        (*env)->SetObjectArrayElement(env, resultArr, 0,
+                                                                      (*env)->NewStringUTF(env, "-3"));
+                                        close(fd);
+                                        free(context);
+                                        free(options);
+                                        return resultArr;
+                                }
+                                found = 1;
+                                break;
+                        }
+                }
+        } else {
+                found = 1;
+        }
+        if (!found) {
+                // Release
+                (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                // architecture not found
+                (*env)->SetObjectArrayElement(env, resultArr, 0,
+                                              (*env)->NewStringUTF(env, "-6"));
+                close(fd);
+                free(context);
+                free(options);
+                return resultArr;
+        }
+        if (magic != MH_MAGIC && magic != MH_MAGIC_64) {
+                // Release
+                (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+                (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+                // invalid magic for architecture
+                (*env)->SetObjectArrayElement(env, resultArr, 0,
+                                              (*env)->NewStringUTF(env, "-7"));
+                close(fd);
+                free(context);
+                free(options);
+                return resultArr;
+        }
+        dwarf_mach_object_access_init(fd, &binary_interface, &derr, context);
+        assert(binary_interface);
+        // Release
+        (*env)->ReleaseStringUTFChars(env, arch, n_arch);
+        (*env)->ReleaseStringUTFChars(env, dSYM, n_dSYM);
+        (*env)->SetObjectArrayElement(env, resultArr, 0,
+                                      (*env)->NewStringUTF(env, "0"));
+        (*env)->SetObjectArrayElement(env, resultArr, 1,
+                                      (*env)->NewStringUTF(env, context->uuid_str));
         close(fd);
         free(context);
         free(options);
