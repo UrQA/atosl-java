@@ -44,11 +44,11 @@ public ArrayList<String> doSymbolicate(String arch, String dSYM, String[] addres
                 ArrayList<String> symbolicated = new ArrayList<String>();
                 for(int i = 1; i < addresses.length; i++) {
                         if(result[i].equals(addresses[i])) {
-                            // Not symbolicated
-                            symbolicated.add("");
+                                // Not symbolicated
+                                symbolicated.add("");
                         }else{
-                            // symbolicated
-                            symbolicated.add(result[i]);
+                                // symbolicated
+                                symbolicated.add(result[i]);
                         }
                         System.out.println(symbolicated.get(i-1));
                 }
@@ -74,7 +74,7 @@ static public void main(String argv[]) {
         }
         // Symbolication
         ArrayList<String> data = atosl.doSymbolicate(test_arch,
-                              test_dSYM,
-                              test1_Address);
+                                                     test_dSYM,
+                                                     test1_Address);
 }
 }
