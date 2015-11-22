@@ -925,7 +925,7 @@ int print_dwarf_symbol(Dwarf_Debug dbg, Dwarf_Addr slide, Dwarf_Addr addr, char 
         return found ? DW_DLV_OK : DW_DLV_NO_ENTRY;
 }
 
-JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
+JNIEXPORT jobjectArray JNICALL Java_io_honeyqa_atosl_Atosl_findArch
         (JNIEnv * env, jobject jobj, jstring dSYM){
         int i, j, k;
         int fd;
@@ -1050,7 +1050,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_findArch
         return resultArr;
 }
 
-JNIEXPORT jobjectArray JNICALL Java_Atosl_checkUUID
+JNIEXPORT jobjectArray JNICALL Java_io_honeyqa_atosl_Atosl_checkUUID
         (JNIEnv * env, jobject jobj, jstring arch, jstring dSYM){
         jobjectArray resultArr = (jobjectArray)(*env)->NewObjectArray(env, 2,
                                                                       (*env)->FindClass(env, "java/lang/String"),
@@ -1243,7 +1243,7 @@ JNIEXPORT jobjectArray JNICALL Java_Atosl_checkUUID
         return resultArr;
 }
 
-JNIEXPORT jobjectArray JNICALL Java_Atosl_symbolicate
+JNIEXPORT jobjectArray JNICALL Java_io_honeyqa_atosl_Atosl_symbolicate
         (JNIEnv * env, jobject jobj, jstring arch, jstring dSYM, jobjectArray adr, jint adrlen){
         jobjectArray resultArr = (jobjectArray)(*env)->NewObjectArray(env, adrlen,
                                                                       (*env)->FindClass(env, "java/lang/String"),
