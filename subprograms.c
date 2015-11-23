@@ -148,7 +148,8 @@ static struct dwarf_subprogram_t *read_cu_entry(
 
     rc = dwarf_tag(the_die, &tag, &err);
     if (rc != DW_DLV_OK)
-        fatal("unable to parse dwarf tag");
+        // fatal("unable to parse dwarf tag");
+        return NULL;
 
     /* Only interested in subprogram DIEs here */
     if (tag != DW_TAG_subprogram)
@@ -156,7 +157,8 @@ static struct dwarf_subprogram_t *read_cu_entry(
 
     rc = dwarf_diename(the_die, &die_name, &err);
     if (rc == DW_DLV_ERROR)
-        fatal("unable to parse dwarf diename");
+        // fatal("unable to parse dwarf diename");
+        return NULL;
 
     if (rc == DW_DLV_NO_ENTRY)
         return subprograms;
@@ -217,6 +219,9 @@ static void handle_die(
 
         /* Recursive call handle_die with child, to continue searching within child dies */
         rc = dwarf_child(current_die, &child_die, &err);
+        if(rc == NULL){
+            break;
+        }
         DWARF_ASSERT(rc, err);
         if (rc == DW_DLV_OK && child_die)
             handle_die(subprograms, dbg, cu_die, child_die, language);
